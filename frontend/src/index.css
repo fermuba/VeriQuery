@@ -1,0 +1,89 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 215 25% 97%;
+    --foreground: 215 25% 12%;
+
+    --card: 215 20% 99%;
+    --card-foreground: 215 25% 12%;
+
+    --primary: 205 100% 41%;
+    --primary-foreground: 0 0% 100%;
+
+    --muted: 215 20% 94%;
+    --muted-foreground: 215 15% 46%;
+
+    --accent: 192 100% 47%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --success: 160 84% 39%;
+    --warning: 35 92% 50%;
+
+    --border: 215 18% 88%;
+    --ring: 205 100% 41%;
+
+    --sidebar-background: 215 22% 96%;
+    --sidebar-foreground: 215 20% 30%;
+    --sidebar-accent: 205 100% 96%;
+    --sidebar-accent-foreground: 205 100% 41%;
+    --sidebar-border: 215 18% 90%;
+
+    --bento-shadow: 0 0 0 1px rgba(0,0,0,.03), 0 2px 4px rgba(0,0,0,.05), 0 12px 24px -12px rgba(0,0,0,.05);
+    --bento-shadow-hover: 0 0 0 1px rgba(0,0,0,.03), 0 4px 8px rgba(0,0,0,.06), 0 18px 32px -12px rgba(0,0,0,.08);
+  }
+
+  * { @apply border-border box-border; }
+
+  html {
+    font-size: 17px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-heading {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .bento-card {
+    @apply bg-card rounded-xl transition-all duration-200;
+    box-shadow: var(--bento-shadow);
+  }
+  .bento-card:hover {
+    box-shadow: var(--bento-shadow-hover);
+  }
+  .glass-surface {
+    background: hsl(215 22% 91% / 0.95);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  .sentinel-gradient {
+    background: linear-gradient(135deg, hsl(210 20% 98%) 0%, hsl(205 30% 96%) 100%);
+  }
+  .label-xs {
+    @apply text-xs font-bold uppercase tracking-wider text-muted-foreground;
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  pre, code, .font-mono {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+}
