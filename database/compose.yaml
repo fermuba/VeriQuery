@@ -1,0 +1,29 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqlserver-contoso
+    environment:
+      # Acepta la licencia del contenedor de SQL Server
+      ACCEPT_EULA: "Y"
+
+      # Usuario administrador del motor SQL
+      MSSQL_SA_USER: "sa"
+
+      # Cambiá esto por una contraseña fuerte
+      MSSQL_SA_PASSWORD: "VeriQuery26!"
+
+    ports:
+      # Expone SQL Server en tu máquina local
+      - "1433:1433"
+
+    volumes:
+      # Persistencia de la base de datos
+      - sqlserver_data:/var/opt/mssql
+
+      # Carpeta local para dejar backups .bak y scripts .sql
+      - ./assets:/assets
+
+    restart: unless-stopped
+
+volumes:
+  sqlserver_data:
