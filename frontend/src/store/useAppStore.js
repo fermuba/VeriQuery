@@ -36,11 +36,12 @@ export const useAppStore = create((set, get) => ({
       const res = await fetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: text }),
+        body: JSON.stringify({ question: text }),
       })
       const data = await res.json()
-      addMessage({ role: 'assistant', ...data })
-      if (data.results) setQueryResult(data.results)
+      // Map 'answer' to 'text' for consistency in UI
+      addMessage({ role: 'assistant', text: data.answer, ...data })
+      if (data.data) setQueryResult(data.data)
       addAuditEvent({ type: 'query', text, status: 'success', confidence: data.confidence })
     } catch {
       addMessage({ role: 'assistant', text: 'Error al procesar la consulta.', confidence: 0, error: true })

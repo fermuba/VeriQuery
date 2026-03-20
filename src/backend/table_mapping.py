@@ -1,86 +1,92 @@
 """
-Semantic Metadata Mapping - ACTUALIZADO PARA CONTOSO SOCIAL
+Semantic Metadata Mapping - CONTOSO V2 10K (ecommerce)
 
 Mapea conceptos de negocio a tablas REALES de tu base de datos:
-- Usuario pregunta sobre "beneficiarios" → Buscar en "Dim_Beneficiario"
-- Usuario pregunta sobre "asistencias" → Buscar en "Fact_Asistencia"
+- Usuario pregunta sobre "clientes" → Buscar en "Customer"
+- Usuario pregunta sobre "ordenes/transacciones" → Buscar en "Sales"
+- Usuario pregunta sobre "productos" → Buscar en "Product"
+- Usuario pregunta sobre "tienda" → Buscar en "Store"
 """
 
 import re
 from typing import Dict, List, Tuple, Optional
 
 # ============================================================================
-# MAPEO SEMÁNTICO CORRECTO: Conceptos → Tablas REALES
+# MAPEO SEMÁNTICO: Conceptos → Tablas REALES (ContosoV210k)
 # ============================================================================
 
 SEMANTIC_MAPPING = {
-    # DOMINIO: Beneficiarios
-    "beneficiario": "Dim_Beneficiario",
-    "beneficiarios": "Dim_Beneficiario",
-    "beneficiaria": "Dim_Beneficiario",
-    "familia": "Dim_Beneficiario",
-    "familias": "Dim_Beneficiario",
-    "persona": "Dim_Beneficiario",
-    "personas": "Dim_Beneficiario",
-    "usuario": "Dim_Beneficiario",
-    "usuarios": "Dim_Beneficiario",
-    "asistido": "Dim_Beneficiario",
-    "asistidos": "Dim_Beneficiario",
-    "cliente": "Dim_Beneficiario",
-    "clientes": "Dim_Beneficiario",
+    # DOMINIO: Clientes
+    "beneficiario": "Customer",
+    "beneficiarios": "Customer",
+    "beneficiaria": "Customer",
+    "familia": "Customer",
+    "familias": "Customer",
+    "persona": "Customer",
+    "personas": "Customer",
+    "usuario": "Customer",
+    "usuarios": "Customer",
+    "asistido": "Customer",
+    "asistidos": "Customer",
+    "cliente": "Customer",
+    "clientes": "Customer",
+    "customer": "Customer",
+    "customers": "Customer",
     
-    # DOMINIO: Asistencias/Entregas
-    "asistencia": "Fact_Asistencia",
-    "asistencias": "Fact_Asistencia",
-    "entrega": "Fact_Asistencia",
-    "entregas": "Fact_Asistencia",
-    "transaccion": "Fact_Asistencia",
-    "transacciones": "Fact_Asistencia",
-    "evento": "Fact_Asistencia",
-    "eventos": "Fact_Asistencia",
-    "orden": "Fact_Asistencia",
-    "ordenes": "Fact_Asistencia",
+    # DOMINIO: Ventas/Transacciones
+    "asistencia": "Sales",
+    "asistencias": "Sales",
+    "entrega": "Sales",
+    "entregas": "Sales",
+    "transaccion": "Sales",
+    "transacciones": "Sales",
+    "evento": "Sales",
+    "eventos": "Sales",
+    "orden": "Sales",
+    "ordenes": "Sales",
+    "venta": "Sales",
+    "ventas": "Sales",
+    "order": "Sales",
+    "orders": "Sales",
+    "sale": "Sales",
+    "sales": "Sales",
     
-    # DOMINIO: Productos/Servicios/Tipos de Asistencia
-    "producto": "Dim_TipoAsistencia",
-    "productos": "Dim_TipoAsistencia",
-    "servicio": "Dim_TipoAsistencia",
-    "servicios": "Dim_TipoAsistencia",
-    "item": "Dim_TipoAsistencia",
-    "items": "Dim_TipoAsistencia",
-    "tipo": "Dim_TipoAsistencia",
-    "tipos": "Dim_TipoAsistencia",
+    # DOMINIO: Productos/Servicios
+    "producto": "Product",
+    "productos": "Product",
+    "servicio": "Product",
+    "servicios": "Product",
+    "item": "Product",
+    "items": "Product",
+    "tipo": "Product",
+    "tipos": "Product",
+    "producto_id": "Product",
+    "product": "Product",
+    "products": "Product",
     
-    # DOMINIO: Ubicación
-    "ubicacion": "Dim_Ubicacion",
-    "ubicaciones": "Dim_Ubicacion",
-    "zona": "Dim_Ubicacion",
-    "zonas": "Dim_Ubicacion",
-    "barrio": "Dim_Ubicacion",
-    "barrios": "Dim_Ubicacion",
-    "localidad": "Dim_Ubicacion",
-    "localidades": "Dim_Ubicacion",
-    "provincia": "Dim_Ubicacion",
-    "provincias": "Dim_Ubicacion",
+    # DOMINIO: Ubicación/Tiendas
+    "ubicacion": "Store",
+    "ubicaciones": "Store",
+    "zona": "Store",
+    "zonas": "Store",
+    "barrio": "Store",
+    "barrios": "Store",
+    "tienda": "Store",
+    "tiendas": "Store",
+    "tiendas": "Store",
+    "store": "Store",
+    "stores": "Store",
     
-    # DOMINIO: Programas
-    "programa": "Dim_Programa",
-    "programas": "Dim_Programa",
-    "proyecto": "Dim_Programa",
-    "proyectos": "Dim_Programa",
-    
-    # DOMINIO: Tiempo
-    "fecha": "Dim_Tiempo",
-    "fechas": "Dim_Tiempo",
-    "tiempo": "Dim_Tiempo",
-    "periodo": "Dim_Tiempo",
-    "periodos": "Dim_Tiempo",
-    
-    # DOMINIO: Donaciones
-    "donacion": "Fact_Donacion",
-    "donaciones": "Fact_Donacion",
-    "donante": "Dim_Donante",
-    "donantes": "Dim_Donante",
+    # DOMINIO: Tiempo/Fecha
+    "fecha": "Date",
+    "fechas": "Date",
+    "tiempo": "Date",
+    "periodo": "Date",
+    "periodos": "Date",
+    "date": "Date",
+    "dates": "Date",
+    "month": "Date",
+    "months": "Date",
 }
 
 # ============================================================================
@@ -297,12 +303,12 @@ def get_semantic_context(question: str) -> str:
 # ============================================================================
 
 TABLE_ALIASES = {
-    'Dim_Beneficiario': ['Dim_Beneficiario', 'DimBeneficiario', 'Beneficiario', 'Customer'],
-    'Fact_Asistencia': ['Fact_Asistencia', 'FactAsistencia', 'Asistencia', 'Orders'],
-    'Dim_TipoAsistencia': ['Dim_TipoAsistencia', 'DimTipoAsistencia', 'TipoAsistencia', 'Product'],
-    'Dim_Ubicacion': ['Dim_Ubicacion', 'DimUbicacion', 'Ubicacion', 'Geography'],
-    'Dim_Programa': ['Dim_Programa', 'DimPrograma', 'Programa'],
-    'Dim_Tiempo': ['Dim_Tiempo', 'DimTiempo', 'Tiempo', 'Date'],
-    'Dim_Donante': ['Dim_Donante', 'DimDonante', 'Donante'],
-    'Fact_Donacion': ['Fact_Donacion', 'FactDonacion', 'Donacion'],
+    'Dim_Beneficiario': ['Dim_Beneficiario', 'DimBeneficiario', 'dim_beneficiarios', 'Beneficiario', 'Customer'],
+    'Fact_Asistencia': ['Fact_Asistencia', 'FactAsistencia', 'fact_asistencias', 'Asistencia', 'Orders'],
+    'Dim_TipoAsistencia': ['Dim_TipoAsistencia', 'DimTipoAsistencia', 'dim_tipo_asistencias', 'TipoAsistencia', 'Product'],
+    'Dim_Ubicacion': ['Dim_Ubicacion', 'DimUbicacion', 'dim_ubicaciones', 'Ubicacion', 'Geography'],
+    'Dim_Programa': ['Dim_Programa', 'DimPrograma', 'dim_programas', 'Programa'],
+    'Dim_Tiempo': ['Dim_Tiempo', 'DimTiempo', 'dim_tiempo', 'Tiempo', 'Date'],
+    'Dim_Donante': ['Dim_Donante', 'DimDonante', 'dim_donantes', 'Donante'],
+    'Fact_Donacion': ['Fact_Donacion', 'FactDonacion', 'fact_donaciones', 'Donacion'],
 }
