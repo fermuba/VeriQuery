@@ -88,20 +88,21 @@ class NL2SQLGenerator:
 Pregunta del usuario (en lenguaje natural):
 "{natural_language_query}"
 
-Por favor:
-1. Convierte esta pregunta a una consulta SQL válida
-2. Usa SOLO las tablas y columnas definidas en el esquema anterior
-3. Genera SQL limpia y bien formateada
-4. Incluye comentarios explicativos en la SQL
-5. Proporciona una breve explicación de la lógica
+INSTRUCCIONES CRÍTICAS - LEE ESTO PRIMERO:
+1. Genera EXACTAMENTE UN (1) statement SELECT
+2. NUNCA generes múltiples SELECT o USE statements
+3. NUNCA uses semicolons (;) en tu SQL
+4. NUNCA uses comentarios (--) en tu SQL
+5. Usa SOLO tablas y columnas del esquema
+6. Respeta exactamente los nombres con [brackets] para columnas con espacios
 
-FORMATO DE RESPUESTA (CRÍTICO):
+FORMATO DE RESPUESTA (MUY IMPORTANTE):
 ```sql
--- [Tu SQL aquí]
+SELECT ... FROM ... WHERE ...
 ```
 
 EXPLICACIÓN:
-[Tu explicación aquí]
+[Tu explicación aquí en 2-3 lineas]
         """
         
         try:
@@ -111,11 +112,15 @@ EXPLICACIÓN:
                     {
                         "role": "system",
                         "content": (
-                            "Eres un experto en SQL y eres responsable de convertir preguntas "
-                            "en lenguaje natural a consultas SQL precisas. "
-                            "NUNCA uses tablas o columnas que no estén en el esquema proporcionado. "
-                            "Siempre verifica que existan antes de usarlas. "
-                            "Usa el Star Schema correctamente (FACT en el centro, DIM como satélites).\n\n"
+                            "Eres experto en SQL. Tu ÚNICA tarea es convertir preguntas naturales "
+                            "a UN ÚNICO statement SELECT. NADA MÁS.\n\n"
+                            "REGLAS ABSOLUTAS:\n"
+                            "- Generas SOLO SELECT (nunca CREATE, UPDATE, DELETE, DROP)\n"
+                            "- NUNCA múltiples statements\n"
+                            "- NUNCA semicolons (;)\n"
+                            "- NUNCA comentarios (--)\n"
+                            "- Las columnas con espacios van con [brackets]: [Order Date]\n"
+                            "- Usa alias de tabla (s, c, p, etc.)\n\n"
                             + self.schema_prompt
                         )
                     },
@@ -124,8 +129,8 @@ EXPLICACIÓN:
                         "content": user_message
                     }
                 ],
-                max_tokens=1500,
-                temperature=0.3  # Baja temperatura para ser más determinista
+                max_tokens=800,
+                temperature=0.2  # Temperatura aún más baja para ser determinista
             )
             
             full_response = response.choices[0].message.content

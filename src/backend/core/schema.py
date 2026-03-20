@@ -435,75 +435,107 @@ DB_SCHEMA_METADATA: Dict[str, TableMetadata] = {
 def get_schema_prompt() -> str:
     """
     Genera el prompt completo del esquema para inyectar en el System Message.
-    
-    PROPÓSITO CRÍTICO:
-    - Proporciona al LLM un "contrato de datos" que previene alucinaciones
-    - Enseña los JOINs correctos entre tablas (fact -> dim vía FK)
-    - Define el contexto de negocio para cada tabla
-    - Proporciona ejemplos de preguntas naturales que resuelve cada tabla
-    
-    PREVENCIÓN DE ALUCINACIONES:
-    - Definición explícita de todas las tablas y columnas disponibles
-    - Tipos de datos precisos para evitar conversiones implícitas erróneas
-    - Restricciones documentadas (FK, PK) para guiar JOINs correctos
-    - Contexto de negocio para que el LLM entienda la semántica de los datos
-    
-    FACILITACIÓN DE JOINS:
-    - Cada columna FK incluye la referencia exacta: "tabla.columna"
-    - Tipo de tabla (DIMENSION vs FACT) guía la estrategia de JOIN
-    - Ejemplos de queries muestran patrones de JOIN correctos
-    
-    Returns:
-        str: Prompt formateado para ser inyectado en ChatCompletion
+    CONTOSO V2 10K ECOMMERCE
     """
     
-    prompt_lines = [
-        "=" * 80,
-        "CONTRATO DE DATOS - MOTOR NL2SQL",
-        "Sentinel AI Auditor (Forensic Data Guardian)",
-        "=" * 80,
-        "",
-        "INSTRUCCIONES CRÍTICAS:",
-        "1. NUNCA menciones tablas o columnas no listadas aquí.",
-        "2. Los JOINs SIEMPRE van de FACT -> DIMENSION usando Foreign Keys (FK).",
-        "3. Si una columna tiene FK, úsala para construir el JOIN.",
-        "4. Mantén referencias completas: tabla.columna en la SQL generada.",
-        "5. Incluye siempre timestamp/usuario en filtros para auditoría.",
-        "",
-        "PATRONES DE JOIN (Star Schema):",
-        "  - FACT es el centro; DIM son satélites",
-        "  - Query típica: SELECT * FROM fact JOIN dim ON fact.dim_id = dim.dim_id",
-        "  - Nunca JOIN entre DIMENSIONes directamente (ineficiente)",
-        "",
-        "=" * 80,
-        "TABLAS DISPONIBLES",
-        "=" * 80,
-        "",
-    ]
-    
-    # Agrupar por tipo de tabla
-    dimensions = {k: v for k, v in DB_SCHEMA_METADATA.items() if v.table_type == "DIMENSION"}
-    facts = {k: v for k, v in DB_SCHEMA_METADATA.items() if v.table_type == "FACT"}
-    
-    # Agregar dimensiones
-    prompt_lines.append("--- TABLAS DE DIMENSIÓN (Atributos Maestros) ---\n")
-    for table_name, table_meta in dimensions.items():
-        prompt_lines.extend(_format_table_for_prompt(table_meta))
-        prompt_lines.append("")
-    
-    # Agregar hechos
-    prompt_lines.append("\n--- TABLAS DE HECHOS (Transacciones/Eventos) ---\n")
-    for table_name, table_meta in facts.items():
-        prompt_lines.extend(_format_table_for_prompt(table_meta))
-        prompt_lines.append("")
-    
-    # Agregar resumen de JOINs
-    prompt_lines.extend(_generate_join_guide())
-    
-    # Agregar notas de auditoría
-    prompt_lines.extend(_generate_audit_notes())
-    
-    return "\n".join(prompt_lines)
+    return """
+SCHEMA DE BASE DE DATOS - CONTOSO V2 10K ECOMMERCE
+====================================================
+
+INSTRUCCIONES CRITICAS PARA NL2SQL:
+1. SOLO usa estas 5 tablas: Customer, Sales, Product, Store, Date
+2. NUNCA inventes tablas o columnas que no existan
+3. Usa [brackets] para nombres con espacios: [Order Date], [Product Name]
+4. JOINs: Sales es la tabla central (FACT), las otras son dimensiones
+5. Para fechas, usa DATEPART, MONTH, YEAR (SQL Server, NO DATE_TRUNC)
+
+TABLAS Y COLUMNAS:
+
+Customer (Clientes)
+- CustomerKey (INT) - ID unico
+- Name (NVARCHAR) - Nombre
+- Gender (NVARCHAR) - Genero
+- Age (INT) - Edad
+- Birthday (DATE) - Cumpleanos
+- Address (NVARCHAR) - Direccion
+- City (NVARCHAR) - Ciudad
+- State (NVARCHAR) - Provincia
+- Country (NVARCHAR) - Pais
+- Zip Code (NVARCHAR) - Codigo postal
+
+Product (Catalogo de productos)
+- ProductKey (INT) - ID unico
+- Product Name (NVARCHAR) - Nombre
+- Brand (NVARCHAR) - Marca
+- Category (NVARCHAR) - Categoria
+- Subcategory (NVARCHAR) - Subcategoria
+- Color (NVARCHAR) - Color
+- Weight (FLOAT) - Peso
+- Unit Cost (MONEY) - Costo unitario
+- Unit Price (MONEY) - Precio de venta
+
+Store (Ubicaciones de tiendas)
+- StoreKey (INT) - ID unico
+- Name (NVARCHAR) - Nombre
+- Country (NVARCHAR) - Pais
+- State (NVARCHAR) - Provincia
+- Square Meters (INT) - Tamanio
+- Open Date (DATE) - Fecha apertura
+- Close Date (DATE) - Fecha cierre
+- Status (NVARCHAR) - Estado
+
+Date (Dimension de tiempo)
+- Date (DATE) - Fecha especifica
+- Year (INT) - Anio
+- Month (NVARCHAR) - Nombre mes
+- Month Number (INT) - Numero 1-12
+- Quarter (NVARCHAR) - Q1, Q2, Q3, Q4
+- Day of Week (NVARCHAR) - Monday, Tuesday, etc.
+- Day of Week Number (INT) - 1-7
+- Working Day (BIT) - 1=si, 0=no
+
+Sales (Transacciones - TABLA CENTRAL)
+- Order Number (BIGINT) - ID orden
+- Line Number (INT) - Numero linea
+- Order Date (DATE) - Fecha orden
+- Delivery Date (DATE) - Fecha entrega
+- CustomerKey (INT) - FK a Customer
+- StoreKey (INT) - FK a Store
+- ProductKey (INT) - FK a Product
+- Quantity (INT) - Cantidad
+- Unit Price (MONEY) - Precio unitario
+- Net Price (MONEY) - Precio neto
+- Unit Cost (MONEY) - Costo
+- Currency Code (NVARCHAR) - Moneda
+- Exchange Rate (FLOAT) - Tipo cambio
+
+RELACIONES:
+Sales.CustomerKey -> Customer.CustomerKey
+Sales.ProductKey -> Product.ProductKey
+Sales.StoreKey -> Store.StoreKey
+Sales.[Order Date] -> Date.Date (para analisis temporal)
+
+COLUMNAS CON ESPACIOS (usa [brackets]):
+[Order Date], [Order Number], [Line Number], [Delivery Date], [Product Name],
+[Unit Price], [Net Price], [Unit Cost], [Currency Code], [Exchange Rate],
+[Square Meters], [Open Date], [Close Date], [Month Number], [Day of Week],
+[Day of Week Number], [Working Day], [Zip Code]
+
+EJEMPLOS DE QUERIES VALIDAS:
+
+OK: SELECT COUNT(DISTINCT s.CustomerKey) FROM Sales s 
+    WHERE s.[Order Date] >= '2024-01-01'
+
+OK: SELECT p.[Product Name], SUM(s.Quantity) as total_vendido
+    FROM Sales s JOIN Product p ON s.ProductKey = p.ProductKey
+    GROUP BY p.[Product Name] ORDER BY total_vendido DESC
+
+MAL: SELECT * FROM fact_asistencias (no existe en Contoso)
+MAL: SELECT * FROM Sales WHERE DATETRUNC (SQL Server usa DATEPART)
+MAL: SELECT * FROM Sales s WHERE s.fecha_asistencia (no existe esta columna)
+
+====================================================
+"""
 
 
 def _format_table_for_prompt(table: TableMetadata) -> List[str]:
