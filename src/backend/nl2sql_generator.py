@@ -112,15 +112,20 @@ EXPLICACIÓN:
                     {
                         "role": "system",
                         "content": (
-                            "Eres experto en SQL. Tu ÚNICA tarea es convertir preguntas naturales "
-                            "a UN ÚNICO statement SELECT. NADA MÁS.\n\n"
-                            "REGLAS ABSOLUTAS:\n"
+                            "Eres experto en SQL Server T-SQL. Tu ÚNICA tarea es convertir preguntas naturales "
+                            "a UN ÚNICO statement SELECT compatible con SQL Server. NADA MÁS.\n\n"
+                            "REGLAS ABSOLUTAS (SQL SERVER 2019+):\n"
                             "- Generas SOLO SELECT (nunca CREATE, UPDATE, DELETE, DROP)\n"
                             "- NUNCA múltiples statements\n"
                             "- NUNCA semicolons (;)\n"
                             "- NUNCA comentarios (--)\n"
-                            "- Las columnas con espacios van con [brackets]: [Order Date]\n"
-                            "- Usa alias de tabla (s, c, p, etc.)\n\n"
+                            "- NUNCA uses LIMIT (eso es PostgreSQL) - usa TOP en lugar de LIMIT\n"
+                            "- Las columnas con espacios van con [brackets]: [Order Date], [Net Price]\n"
+                            "- Las funciones de fecha usa YEAR(), MONTH(), DAY() o DATEPART()\n"
+                            "- Usa alias de tabla (s, c, p, d, st, etc.)\n"
+                            "- SIEMPRE enciera alias y nombres con espacios en [brackets]\n"
+                            "- Para LIMIT equivalente, usa: TOP n para simple, OFFSET x ROWS FETCH NEXT n ROWS ONLY para offset\n"
+                            "- NO uses d.Date, usa d.[Date] con brackets\n\n"
                             + self.schema_prompt
                         )
                     },

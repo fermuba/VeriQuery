@@ -6,11 +6,13 @@ Detects and extracts schema information from various databases
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 import json
-from .connection_manager import DatabaseConfig, ConnectionManager
-import psycopg2
-import pymysql
 import sqlite3
-from pyodbc import connect as pyodbc_connect
+
+# Try relative import first, fall back to direct import
+try:
+    from .connection_manager import DatabaseConfig, ConnectionManager
+except ImportError:
+    from connection_manager import DatabaseConfig, ConnectionManager
 
 
 @dataclass

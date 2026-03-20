@@ -9,12 +9,16 @@ from typing import List, Optional, Dict
 import sys
 from pathlib import Path
 
-# Add src to path for imports
+# Add paths for imports
 src_path = str(Path(__file__).parent.parent)
+tools_path = str(Path(__file__).parent.parent.parent.parent / "tools")
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
+if tools_path not in sys.path:
+    sys.path.insert(0, tools_path)
 
 from database.multi_db_connector import MultiDatabaseConnector
+from connection_manager import DatabaseConfig as DBConfig
 
 # Initialize connector
 db_connector = MultiDatabaseConnector()
@@ -89,7 +93,6 @@ class DatabaseActivateResponse(BaseModel):
 @router.post("/test", response_model=DatabaseTestResponse)
 async def test_database_connection(request: DatabaseTestRequest):
     """Test connection to a database"""
-    from connection_manager import DatabaseConfig as DBConfig
 
     config = DBConfig(
         name=request.name,

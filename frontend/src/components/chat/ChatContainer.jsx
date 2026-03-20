@@ -3,6 +3,7 @@ import { Send, Loader2 } from 'lucide-react'
 import { useAppStore } from '../../store/useAppStore'
 import MessageItem from './MessageItem'
 import SuggestedPrompts from './SuggestedPrompts'
+import AmbiguityResolver from './AmbiguityResolver'
 
 const MOCK_MESSAGES = [
   {
@@ -41,6 +42,7 @@ const MOCK_MESSAGES = [
 
 export default function ChatContainer() {
   const [input, setInput] = useState('')
+  const [lastQuestion, setLastQuestion] = useState('')
   const { messages, isLoading, sendQuery } = useAppStore()
   const bottomRef = useRef(null)
 
@@ -53,8 +55,16 @@ export default function ChatContainer() {
   const handleSend = () => {
     const text = input.trim()
     if (!text || isLoading) return
+    setLastQuestion(text)
     setInput('')
     sendQuery(text)
+  }
+
+  const handleAmbiguitySelect = (clarification) => {
+    // El usuario ha seleccionado una clarificación
+    // Ahora enviar la query con contexto adicional
+    console.log('Clarification selected:', clarification)
+    // En una versión futura, esto se puede usar para generar queries complementarias
   }
 
   const handleKey = (e) => {
@@ -69,6 +79,15 @@ export default function ChatContainer() {
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin px-6 py-5 space-y-6">
+        {/* Mostrar resolver de ambigüedad si hay última pregunta */}
+        {lastQuestion && !isLoading && (
+          <AmbiguityResolver 
+            question={lastQuestion} 
+            onSelect={handleAmbiguitySelect}
+            isLoading={isLoading}
+          />
+        )}
+
         {allMessages.map(msg => (
           <MessageItem key={msg.id} message={msg} />
         ))}

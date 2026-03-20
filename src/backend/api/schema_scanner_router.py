@@ -12,8 +12,11 @@ import json
 
 # Add src to path for imports
 src_path = str(Path(__file__).parent.parent)
+tools_path = str(Path(__file__).parent.parent.parent.parent / "tools")
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
+if tools_path not in sys.path:
+    sys.path.insert(0, tools_path)
 
 from database.multi_db_connector import MultiDatabaseConnector
 
@@ -29,7 +32,7 @@ class SchemaScanRequest(BaseModel):
 
 
 class SchemaResponse(BaseModel):
-    schema: Dict
+    schema_data: Dict
     database_name: Optional[str] = None
     error: Optional[str] = None
 
@@ -57,7 +60,7 @@ async def scan_schema(request: SchemaScanRequest):
         raise HTTPException(status_code=400, detail=error)
     
     return SchemaResponse(
-        schema=schema,
+        schema_data=schema,
         database_name=request.database_name,
         error=None,
     )
@@ -75,7 +78,7 @@ async def get_cached_schema():
         raise HTTPException(status_code=400, detail=error)
     
     return SchemaResponse(
-        schema=schema,
+        schema_data=schema,
         database_name=db_connector.active_database.name,
         error=None,
     )
@@ -85,7 +88,6 @@ async def get_cached_schema():
 async def export_schema(request: SchemaExportRequest):
     """Export database schema in specified format"""
     from schema_scanner import SchemaScanner
-    from connection_manager import ConnectionManager
     
     # Get database config
     if request.database_name:

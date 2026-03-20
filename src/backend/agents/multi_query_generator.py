@@ -6,7 +6,12 @@ Generates multiple complementary queries for ambiguous or complex questions
 from enum import Enum
 from typing import List, Dict, Optional
 from dataclasses import dataclass, asdict
-from .ambiguity_detector import MetricType
+
+# Try relative import first (when used as package), fall back to direct import
+try:
+    from .ambiguity_detector import MetricType
+except ImportError:
+    from ambiguity_detector import MetricType
 
 
 @dataclass

@@ -7,10 +7,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 import json
-import pymysql
-import psycopg2
 import sqlite3
-from pyodbc import connect as pyodbc_connect, Error as PyOdbcError
 
 
 @dataclass
@@ -53,6 +50,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
 
     def test_connection(self) -> Tuple[bool, str]:
         try:
+            import psycopg2
             conn = psycopg2.connect(
                 host=self.config.host,
                 port=self.config.port or 5432,
@@ -62,6 +60,8 @@ class PostgreSQLAdapter(DatabaseAdapter):
             )
             conn.close()
             return True, "PostgreSQL connection successful"
+        except ImportError:
+            return False, "psycopg2 not installed"
         except Exception as e:
             return False, f"PostgreSQL connection failed: {str(e)}"
 
@@ -74,6 +74,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 self.cursor = None
 
             def __enter__(self):
+                import psycopg2
                 self.conn = psycopg2.connect(
                     host=self.adapter.config.host,
                     port=self.adapter.config.port or 5432,
@@ -117,6 +118,7 @@ class MySQLAdapter(DatabaseAdapter):
 
     def test_connection(self) -> Tuple[bool, str]:
         try:
+            import pymysql
             conn = pymysql.connect(
                 host=self.config.host,
                 port=self.config.port or 3306,
@@ -126,6 +128,8 @@ class MySQLAdapter(DatabaseAdapter):
             )
             conn.close()
             return True, "MySQL connection successful"
+        except ImportError:
+            return False, "pymysql not installed"
         except Exception as e:
             return False, f"MySQL connection failed: {str(e)}"
 
@@ -138,6 +142,7 @@ class MySQLAdapter(DatabaseAdapter):
                 self.cursor = None
 
             def __enter__(self):
+                import pymysql
                 self.conn = pymysql.connect(
                     host=self.adapter.config.host,
                     port=self.adapter.config.port or 3306,
@@ -177,6 +182,7 @@ class SQLServerAdapter(DatabaseAdapter):
 
     def test_connection(self) -> Tuple[bool, str]:
         try:
+            from pyodbc import connect as pyodbc_connect
             conn_str = (
                 f"Driver={{ODBC Driver 17 for SQL Server}};"
                 f"Server={self.config.host},{self.config.port or 1433};"
@@ -187,6 +193,8 @@ class SQLServerAdapter(DatabaseAdapter):
             conn = pyodbc_connect(conn_str)
             conn.close()
             return True, "SQL Server connection successful"
+        except ImportError:
+            return False, "pyodbc not installed"
         except Exception as e:
             return False, f"SQL Server connection failed: {str(e)}"
 
@@ -199,6 +207,7 @@ class SQLServerAdapter(DatabaseAdapter):
                 self.cursor = None
 
             def __enter__(self):
+                from pyodbc import connect as pyodbc_connect
                 conn_str = (
                     f"Driver={{ODBC Driver 17 for SQL Server}};"
                     f"Server={self.adapter.config.host},{self.adapter.config.port or 1433};"

@@ -35,6 +35,8 @@ logger = logging.getLogger(__name__)
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
+tools_path = str(Path(__file__).parent.parent.parent.parent / "tools")
+sys.path.insert(0, tools_path)
 
 # Load environment variables
 load_dotenv()
@@ -49,6 +51,11 @@ from database import (
     get_connector_info,
     DatabaseConnector,
 )
+
+# Import routers
+from .database_management_router import router as db_router
+from .schema_scanner_router import router as schema_router
+from .ambiguity_router import router as ambiguity_router
 
 # ============================================================================
 # GLOBAL STATE
@@ -180,6 +187,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(db_router)
+app.include_router(schema_router)
+app.include_router(ambiguity_router)
 
 # ============================================================================
 # REQUEST/RESPONSE MODELS
@@ -489,6 +501,10 @@ async def process_query(request: QueryRequest) -> QueryResponse:
         generated_sql = _clean_sql(generated_sql)
         logger.debug(f"[{query_id}] Cleaned SQL:\n{generated_sql}")
         
+        # Convert to SQL Server syntax if needed
+        generated_sql = _convert_sql_to_sqlserver(generated_sql)
+        logger.debug(f"[{query_id}] SQL Server compatible SQL:\n{generated_sql}")
+        
         # =====================================================================
         # STEP 3: VALIDATE GENERATED SQL FOR SECURITY
         # =====================================================================
@@ -687,6 +703,8 @@ async def process_query(request: QueryRequest) -> QueryResponse:
                 )
             
             logger.error(f"[{query_id}] Query execution failed: {db_result.error}")
+            logger.error(f"[{query_id}] Error type: {db_result.error_type}")
+            logger.error(f"[{query_id}] SQL executed: {generated_sql}")
             return QueryResponse(
                 success=False,
                 answer="Error executing query",
@@ -804,6 +822,94 @@ def _clean_sql(sql: str) -> str:
     sql = sql.strip()
     # Remove extra whitespace
     sql = re.sub(r'\s+', ' ', sql)
+    
+    return sql
+
+
+def _fix_column_names_with_spaces(sql: str) -> str:
+    """
+    Fix column references with spaces - wrap them in brackets.
+    
+    Examples:
+    - SUM(s.Net Price) → SUM(s.[Net Price])
+    - s.Order Date → s.[Order Date]
+    - Already bracketed columns are left alone
+    
+    Args:
+        sql: SQL query
+        
+    Returns:
+        SQL with properly bracketed column names
+    """
+    import re
+    
+    # Pattern: table_alias.ColumnName where ColumnName has spaces (not already bracketed)
+    # Look ahead to ensure we're at a word boundary
+    pattern = r'(\w+\.)([A-Z][A-Za-z\s]+)(?=[\s,);\n]|ORDER|GROUP|WHERE|JOIN|FROM)'
+    
+    def fix_match(match):
+        prefix = match.group(1)  # e.g., "s."
+        col_name = match.group(2).rstrip()  # e.g., "Net Price"
+        
+        # Check if has spaces (multi-word) and isn't already bracketed
+        if ' ' in col_name and '[' not in col_name:
+            return f"{prefix}[{col_name}]"
+        return match.group(0)
+    
+    sql = re.sub(pattern, fix_match, sql, flags=re.IGNORECASE)
+    
+    return sql
+
+
+def _convert_sql_to_sqlserver(sql: str) -> str:
+    """
+    Convert SQL from PostgreSQL/generic syntax to SQL Server syntax.
+    
+    Conversions:
+    - LIMIT n OFFSET m → OFFSET m ROWS FETCH NEXT n ROWS ONLY
+    - LIMIT n → TOP n
+    - Remove RETURNING clause
+    
+    Args:
+        sql: SQL query to convert
+        
+    Returns:
+        SQL Server compatible query
+    """
+    import re
+    
+    # Note: NOT calling _fix_column_names_with_spaces() as it can damage the SQL
+    # Instead, rely on Azure OpenAI to generate correct SQL with brackets
+    
+    # Convert LIMIT n OFFSET m → OFFSET m ROWS FETCH NEXT n ROWS ONLY
+    # Pattern: LIMIT \d+ OFFSET \d+
+    sql = re.sub(
+        r'LIMIT\s+(\d+)\s+OFFSET\s+(\d+)',
+        r'OFFSET \2 ROWS FETCH NEXT \1 ROWS ONLY',
+        sql,
+        flags=re.IGNORECASE
+    )
+    
+    # Convert LIMIT n (without OFFSET) → TOP n
+    # But only if it's at the end of the SELECT clause
+    if re.search(r'LIMIT\s+\d+\s*$', sql, re.IGNORECASE):
+        # Extract the LIMIT value
+        limit_match = re.search(r'LIMIT\s+(\d+)\s*$', sql, re.IGNORECASE)
+        if limit_match:
+            limit_val = limit_match.group(1)
+            # Remove LIMIT clause
+            sql = re.sub(r'\s*LIMIT\s+\d+\s*$', '', sql, flags=re.IGNORECASE)
+            # Add TOP clause after SELECT
+            sql = re.sub(
+                r'SELECT\s+',
+                f'SELECT TOP {limit_val} ',
+                sql,
+                count=1,
+                flags=re.IGNORECASE
+            )
+    
+    # Remove RETURNING clause (SQL Server doesn't support it in SELECT)
+    sql = re.sub(r'\s+RETURNING\s+.*$', '', sql, flags=re.IGNORECASE)
     
     return sql
 

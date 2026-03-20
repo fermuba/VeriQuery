@@ -8,7 +8,12 @@ import os
 from typing import Dict, List, Optional
 from pathlib import Path
 import base64
-from .connection_manager import DatabaseConfig
+
+# Try relative import first, fall back to direct import
+try:
+    from .connection_manager import DatabaseConfig
+except ImportError:
+    from connection_manager import DatabaseConfig
 
 
 class BDConfigManager:
