@@ -1,52 +1,17 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Loader2 } from 'lucide-react'
+import { Send, Loader2, Database, Plus } from 'lucide-react'
 import { useAppStore } from '../../store/useAppStore'
 import MessageItem from './MessageItem'
 import SuggestedPrompts from './SuggestedPrompts'
 import AmbiguityResolver from './AmbiguityResolver'
-
-const MOCK_MESSAGES = [
-  {
-    id: 1,
-    role: 'assistant',
-    text: 'Bienvenido a VeriQuery. Estoy listo para analizar sus datos forenses. Seleccione una consulta sugerida o escriba su propia pregunta.',
-    confidence: 99,
-  },
-  {
-    id: 2,
-    role: 'user',
-    text: 'Detectar anomalías en los registros de acceso del último mes',
-  },
-  {
-    id: 3,
-    role: 'assistant',
-    text: 'Se detectaron 3 anomalías en los registros de acceso. Se identificaron patrones inusuales de acceso fuera del horario laboral desde 2 direcciones IP no reconocidas. Anomalías detectadas en 4.2s.',
-    confidence: 94,
-    sql: `SELECT user_id, access_time, ip_address, action\nFROM access_logs\nWHERE access_time >= NOW() - INTERVAL '30 days'\n  AND (\n    EXTRACT(HOUR FROM access_time) NOT BETWEEN 8 AND 18\n    OR ip_address NOT IN (SELECT ip FROM trusted_ips)\n  )\nORDER BY access_time DESC;`,
-    explanation: 'La consulta filtra los registros de acceso de los últimos 30 días, identificando aquellos que ocurrieron fuera del horario laboral (8:00-18:00) o desde direcciones IP no registradas en la lista de confianza. Los resultados se ordenan cronológicamente para facilitar la investigación forense.',
-  },
-  {
-    id: 4,
-    role: 'user',
-    text: '¿Cuál es el nivel de riesgo de estas anomalías?',
-  },
-  {
-    id: 5,
-    role: 'assistant',
-    text: 'Nivel de riesgo evaluado: MEDIO-ALTO. Dos de las tres anomalías provienen de la misma IP geolocalizada en una región no autorizada. Se recomienda revisión inmediata del acceso del usuario ID #4521. SQL query validado contra política de gobernanza.',
-    confidence: 78,
-    sql: `SELECT a.user_id, u.name, a.ip_address,\n  COUNT(*) as access_count,\n  MAX(a.risk_score) as max_risk\nFROM access_anomalies a\nJOIN users u ON a.user_id = u.id\nWHERE a.detected_at >= NOW() - INTERVAL '30 days'\nGROUP BY a.user_id, u.name, a.ip_address\nORDER BY max_risk DESC;`,
-    explanation: 'Se cruzan las anomalías detectadas con la tabla de usuarios para obtener información del responsable. La puntuación de riesgo se calcula con un modelo que pondera: hora de acceso, geolocalización IP, frecuencia de intentos y tipo de recurso accedido.',
-  },
-]
+import DatabaseConfigPanel from '../database/DatabaseConfigPanel'
 
 export default function ChatContainer() {
   const [input, setInput] = useState('')
   const [lastQuestion, setLastQuestion] = useState('')
+  const [showDatabasePanel, setShowDatabasePanel] = useState(true)
   const { messages, isLoading, sendQuery } = useAppStore()
   const bottomRef = useRef(null)
-
-  const allMessages = messages.length === 0 ? MOCK_MESSAGES : messages
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -56,15 +21,13 @@ export default function ChatContainer() {
     const text = input.trim()
     if (!text || isLoading) return
     setLastQuestion(text)
+    setShowDatabasePanel(false)
     setInput('')
     sendQuery(text)
   }
 
   const handleAmbiguitySelect = (clarification) => {
-    // El usuario ha seleccionado una clarificación
-    // Ahora enviar la query con contexto adicional
     console.log('Clarification selected:', clarification)
-    // En una versión futura, esto se puede usar para generar queries complementarias
   }
 
   const handleKey = (e) => {
@@ -79,6 +42,22 @@ export default function ChatContainer() {
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin px-6 py-5 space-y-6">
+        {/* Mostrar panel de configuración de BD si no hay mensajes */}
+        {messages.length === 0 && showDatabasePanel && (
+          <div className="space-y-4">
+            <div className="bento-card p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <Database className="w-5 h-5 text-primary" />
+                <h3 className="font-semibold text-foreground">Configurar Base de Datos</h3>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Seleccione una base de datos guardada o agregue una nueva para comenzar.
+              </p>
+              <DatabaseConfigPanel />
+            </div>
+          </div>
+        )}
+
         {/* Mostrar resolver de ambigüedad si hay última pregunta */}
         {lastQuestion && !isLoading && (
           <AmbiguityResolver 
@@ -88,7 +67,7 @@ export default function ChatContainer() {
           />
         )}
 
-        {allMessages.map(msg => (
+        {messages.map(msg => (
           <MessageItem key={msg.id} message={msg} />
         ))}
 

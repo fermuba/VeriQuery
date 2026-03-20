@@ -3,7 +3,7 @@ Permission Validator for Database Read-Only Access
 Validates that connections have appropriate read-only permissions
 """
 
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict
 import logging
 from database.multi_db_connector import MultiDatabaseConnector
 
