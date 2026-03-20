@@ -402,7 +402,7 @@ class PromptShield:
                 )
         
         # 3. Detectar múltiples sentencias (;)
-        if sql.count(';') > 1 or re.search(r';\s*(?i)(DROP|DELETE|UPDATE)', sql):
+        if sql.count(';') > 1 or re.search(r'(?i);\s*(DROP|DELETE|UPDATE)', sql):
             event = SecurityEvent(
                 threat_type=ThreatType.MALFORMED_SQL,
                 threat_level=ThreatLevel.CRITICAL,
