@@ -206,6 +206,14 @@ class DetectionPatterns:
         # Comandos de administración
         (r"(?i)\b(EXEC|EXECUTE|SCRIPT|SHELL|SYSTEM)\b",
          ThreatLevel.HIGH),
+         
+        # Agregado: intención destructiva en lenguaje natural
+        (r'(?i)\b(borra|elimina|destruye|vací[ao]|trunca|limpia|borrá|eliminá)\s+'
+         r'(la[s]?\s+)?(tabla[s]?|base|datos?|registros?|todo|bd)',
+         ThreatLevel.HIGH),
+
+        (r'(?i)\b(drop|delete|truncate|wipe|purge)\s+(all|the|las?|los?|todo)',
+         ThreatLevel.HIGH),
     ]
     
     # === PII (PERSONALLY IDENTIFIABLE INFORMATION) ===

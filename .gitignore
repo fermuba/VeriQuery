@@ -31,3 +31,9 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs del tracer
+logs/queries/
+
+# Variables de entorno locales
+env_additions.txt
