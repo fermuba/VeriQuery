@@ -1,110 +1,424 @@
 """
-NL2SQL Generator - Demo
-=======================
+VeriQuery — NL2SQL Generator (Orquestador)
+==========================================
+Coordina el flujo completo NL → SQL → Respuesta.
 
-Demuestra cómo usar el Semantic Metadata Mapping para generar SQL a partir de 
-lenguaje natural usando Azure OpenAI.
-
-Este archivo es un prototipo que:
-1. Carga el esquema de metadatos
-2. Inyecta el esquema en el System Prompt de ChatGPT
-3. Envía preguntas en lenguaje natural
-4. Recibe SQL generado
-5. Valida que la SQL solo use tablas/columnas definidas
+# Agregado: schema_name dinámico por tipo de BD
+#   SQL Server → TABLE_SCHEMA = 'dbo'
+#   PostgreSQL/Supabase → TABLE_SCHEMA = 'public'
+#   Resuelve el problema de tablas no encontradas al cambiar de BD
+# Agregado: QueryTracer con finalize() — escribe logs/queries/
+# Agregado: schema_cache con db_name como clave
+# Agregado: set_active_database() para cambio de BD en runtime
+# Correccion: eliminado uso de core/schema.py y table_mapping
 """
 
 import os
 import sys
+import logging
 from pathlib import Path
+from typing import Optional
 
-# Agregar directorio padre al path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dotenv import load_dotenv
 from openai import AzureOpenAI
-from src.backend.core.schema import (
-    get_schema_prompt,
-    get_table_by_name,
-    validate_column_exists,
-)
-import logging
-import re
 
-# Configurar logging
+from src.backend.agents.ambiguity_detector import AmbiguityDetector
+from src.backend.agents.query_crafter import QueryCrafter
+from src.backend.database.factory import get_database_connector
+from src.backend.core.tracer import QueryTracer
+
+load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Cargar variables de entorno
-load_dotenv()
+
+# Agregado: map de schema_name por tipo de BD
+# Cada motor de BD usa un nombre distinto para el schema por defecto
+DB_SCHEMA_NAMES = {
+    "sqlserver":  "dbo",
+    "postgresql": "public",   # PostgreSQL, Supabase, Azure PostgreSQL
+    "sqlite":     "main",
+}
 
 
 class NL2SQLGenerator:
     """
-    Generador de SQL a partir de Lenguaje Natural.
-    
-    Arquitectura:
-    1. System Prompt: Incluye el esquema completo (prevención de alucinaciones)
-    2. User Message: Pregunta en lenguaje natural
-    3. Respuesta: SQL generada
-    4. Validación: Verificar que solo use tablas/columnas válidas
+    Orquestador del flujo NL → SQL.
+    Compatible con SQL Server, PostgreSQL (Supabase, Azure), SQLite.
     """
-    
+
     def __init__(self):
-        """Inicializar el generador NL2SQL"""
-        
-        # Inicializar cliente Azure OpenAI
         self.client = AzureOpenAI(
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
             api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
         )
-        
         self.deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_GPT4O_MINI")
-        
-        # Obtener el prompt del esquema
-        self.schema_prompt = get_schema_prompt()
-        
+
+        # Caché de schemas: {db_name: schema_text}
+        self._schema_cache: dict = {}
+        self._active_db_name: Optional[str] = None
+        self._active_db_type: Optional[str] = None
+        self._active_connector = None
+
+        self.ambiguity_detector = AmbiguityDetector()
+        self.query_crafter = QueryCrafter(azure_client=self.client)
+
+        self._load_default_database()
         logger.info("✅ NL2SQLGenerator inicializado")
-    
-    def generate_sql(self, natural_language_query: str) -> dict:
+
+    def _load_default_database(self) -> None:
+        """Carga la BD configurada en .env al iniciar."""
+        try:
+            db_type = os.getenv("DATABASE_TYPE", "sqlserver").lower()
+            db_name = os.getenv("DB_NAME", "default")
+
+            connector = get_database_connector()
+            connector.connect()
+
+            schema = self._load_schema_from_connector(
+                connector=connector,
+                db_name=db_name,
+                db_type=db_type
+            )
+
+            self._schema_cache[db_name] = schema
+            self._active_db_name = db_name
+            self._active_db_type = db_type
+            self._active_connector = connector
+
+            logger.info(
+                f"✅ BD por defecto: {db_name} ({db_type}) "
+                f"— {len(schema)} chars de schema"
+            )
+        except Exception as e:
+            logger.error(f"❌ No se pudo cargar BD por defecto: {e}")
+
+    def set_active_database(
+        self,
+        db_name: str,
+        connector,
+        db_type: str = "sqlserver"
+    ) -> dict:
         """
-        Genera SQL a partir de una pregunta en lenguaje natural.
-        
+        Cambia la BD activa en runtime sin reiniciar el servidor.
+        Llamado desde POST /api/connect en main.py.
+
         Args:
-            natural_language_query: Pregunta en lenguaje natural
-            
+            db_name:   identificador de la BD (ej: "contoso", "supabase_ong")
+            connector: instancia ya conectada
+            db_type:   "sqlserver" | "postgresql" | "sqlite"
+
         Returns:
-            Diccionario con:
-            - sql: Consulta SQL generada
-            - explanation: Explicación de la SQL
-            - valid: ¿La SQL es válida?
-            - tables_used: Tablas identificadas
+            dict con success, db_name, schema_chars, cached
         """
-        
-        logger.info(f"🔄 Generando SQL para: {natural_language_query}")
-        
-        # Construir el mensaje del usuario
-        user_message = f"""
-Pregunta del usuario (en lenguaje natural):
-"{natural_language_query}"
+        # Usar caché si ya fue cargado para esta BD
+        if db_name in self._schema_cache:
+            self._active_db_name = db_name
+            self._active_db_type = db_type
+            self._active_connector = connector
+            logger.info(f"✅ BD activa → '{db_name}' (desde caché)")
+            return {
+                "success": True,
+                "db_name": db_name,
+                "db_type": db_type,
+                "schema_chars": len(self._schema_cache[db_name]),
+                "cached": True
+            }
 
-INSTRUCCIONES CRÍTICAS - LEE ESTO PRIMERO:
-1. Genera EXACTAMENTE UN (1) statement SELECT
-2. NUNCA generes múltiples SELECT o USE statements
-3. NUNCA uses semicolons (;) en tu SQL
-4. NUNCA uses comentarios (--) en tu SQL
-5. Usa SOLO tablas y columnas del esquema
-6. Respeta exactamente los nombres con [brackets] para columnas con espacios
+        try:
+            schema = self._load_schema_from_connector(
+                connector=connector,
+                db_name=db_name,
+                db_type=db_type
+            )
+            self._schema_cache[db_name] = schema
+            self._active_db_name = db_name
+            self._active_db_type = db_type
+            self._active_connector = connector
 
-FORMATO DE RESPUESTA (MUY IMPORTANTE):
-```sql
-SELECT ... FROM ... WHERE ...
-```
+            logger.info(
+                f"✅ BD activa → '{db_name}' ({db_type}) "
+                f"— schema recargado {len(schema)} chars"
+            )
+            return {
+                "success": True,
+                "db_name": db_name,
+                "db_type": db_type,
+                "schema_chars": len(schema),
+                "cached": False
+            }
+        except Exception as e:
+            logger.error(f"❌ Error cargando schema de '{db_name}': {e}")
+            return {"success": False, "error": str(e)}
 
-EXPLICACIÓN:
-[Tu explicación aquí en 2-3 lineas]
+    def get_active_schema(self) -> str:
+        if self._active_db_name and self._active_db_name in self._schema_cache:
+            return self._schema_cache[self._active_db_name]
+        return "⚠️ Schema no disponible — conectá una BD primero"
+
+    def generate_sql(
+        self,
+        natural_language_query: str,
+        conversation_history: list = None
+    ) -> dict:
         """
-        
+        Orquesta el flujo completo para una consulta.
+
+        Returns:
+            dict con type + trace_steps (si TRACE_RESPONSE=true)
+        """
+        if conversation_history is None:
+            conversation_history = []
+
+        tracer = QueryTracer(question=natural_language_query)
+
+        # ── PASO 1: Ambigüedad ────────────────────────────────────────────
+        tracer.step(
+            archivo="ambiguity_detector",
+            paso="detectar",
+            entrada=natural_language_query,
+            accion="Buscando keywords ambiguos: mejor, peor, más, menos...",
+            salida="pendiente..."
+        )
+
+        ambiguity = self.ambiguity_detector.detect(natural_language_query)
+
+        if ambiguity["is_ambiguous"]:
+            tracer.step(
+                archivo="ambiguity_detector",
+                paso="resultado",
+                entrada=f"Keywords: {ambiguity['keywords_found']}",
+                accion="Ambigüedad detectada",
+                salida=f"{len(ambiguity['clarifications'])} opciones → front"
+            )
+            trace_data = tracer.finalize()
+            return {
+                "type": "clarification",
+                "keywords_found": ambiguity["keywords_found"],
+                "clarifications": ambiguity["clarifications"],
+                "confidence": ambiguity["confidence"],
+                "natural_query": natural_language_query,
+                "trace_steps": trace_data
+            }
+
+        tracer.step(
+            archivo="ambiguity_detector",
+            paso="resultado",
+            entrada=natural_language_query,
+            accion="Sin ambigüedad",
+            salida="CLEAR → query_crafter"
+        )
+
+        # ── PASO 2: Historial ─────────────────────────────────────────────
+        enriched_query = self._enrich_with_history(
+            natural_language_query, conversation_history, tracer
+        )
+
+        # ── PASO 3: Schema activo ─────────────────────────────────────────
+        schema_info = self.get_active_schema()
+
+        tracer.step(
+            archivo="nl2sql_generator",
+            paso="schema",
+            entrada=f"BD activa: {self._active_db_name} ({self._active_db_type})",
+            accion="Obteniendo schema desde caché",
+            salida=f"{len(schema_info)} chars → inyectar en prompt"
+        )
+
+        if "⚠️" in schema_info:
+            tracer.error(
+                "nl2sql_generator", "schema",
+                "Schema no disponible — no hay BD activa"
+            )
+            trace_data = tracer.finalize()
+            return {
+                "type": "error",
+                "message": "No hay base de datos activa. Conectá una BD primero.",
+                "trace_steps": trace_data
+            }
+
+        # ── PASO 4: Generar SQL ───────────────────────────────────────────
+        crafter_result = self.query_crafter.generate_sql(
+            user_question=enriched_query,
+            schema_info=schema_info,
+            tracer=tracer
+        )
+
+        if "error" in crafter_result and not crafter_result.get("sql"):
+            tracer.error(
+                "query_crafter", "generar_sql",
+                crafter_result.get("error", "Error desconocido"),
+                enriched_query
+            )
+            trace_data = tracer.finalize()
+            return {
+                "type": "error",
+                "message": f"No pude generar la consulta: {crafter_result.get('error')}",
+                "trace_steps": trace_data
+            }
+
+        sql = crafter_result["sql"]
+        tables_used = crafter_result.get("tables_used", [])
+
+        # ── PASO 5: Validar SQL ───────────────────────────────────────────
+        validation = self._validate_sql(sql, tracer)
+
+        # ── PASO 6: Confidence ────────────────────────────────────────────
+        confidence, confidence_label = self._calculate_confidence(
+            sql, tables_used, validation
+        )
+
+        # ── PASO 7: Reasoning + Explanation ──────────────────────────────
+        reasoning = self._build_reasoning(
+            natural_language_query, enriched_query,
+            sql, tables_used, validation, tracer
+        )
+        explanation = self._generate_explanation(
+            natural_language_query, sql, tracer
+        )
+
+        # Finalizar tracer — escribe logs, devuelve dict si TRACE_RESPONSE=true
+        trace_data = tracer.finalize()
+
+        return {
+            "type": "answer",
+            "natural_query": natural_language_query,
+            "sql": sql,
+            "explanation": explanation,
+            "reasoning": reasoning,
+            "valid": validation["valid"],
+            "validation_notes": validation["notes"],
+            "tables_used": tables_used,
+            "confidence": confidence,
+            "confidence_label": confidence_label,
+            "tokens_used": crafter_result.get("tokens", 0),
+            "cost_usd": crafter_result.get("cost_usd", 0),
+            "active_db": self._active_db_name,
+            "active_db_type": self._active_db_type,
+            "trace_steps": trace_data
+        }
+
+    # ── CARGA DE SCHEMA ───────────────────────────────────────────────────
+
+    def _load_schema_from_connector(
+        self,
+        connector,
+        db_name: str,
+        db_type: str = "sqlserver"
+    ) -> str:
+        """
+        Carga schema real desde cualquier conector.
+
+        Agregado: db_type determina el TABLE_SCHEMA correcto:
+          - sqlserver  → 'dbo'
+          - postgresql → 'public'  (Supabase, Azure PostgreSQL)
+          - sqlite     → 'main'
+
+        Esto resuelve el problema de tablas no encontradas
+        al conectar a PostgreSQL/Supabase desde código escrito para SQL Server.
+        """
+        # Agregado: resolver schema_name según el motor
+        schema_name = DB_SCHEMA_NAMES.get(db_type.lower(), "dbo")
+        logger.info(
+            f"📊 Cargando schema de '{db_name}' "
+            f"({db_type}) — TABLE_SCHEMA='{schema_name}'"
+        )
+
+        try:
+            schema_text = (
+                f"=== SCHEMA: {db_name} ({db_type}) ===\n"
+                f"TABLE_SCHEMA: {schema_name}\n\n"
+            )
+
+            # Agregado: query parametrizada con schema_name dinámico
+            tables_result = connector.execute_query(f"""
+                SELECT TABLE_NAME
+                FROM INFORMATION_SCHEMA.TABLES
+                WHERE TABLE_SCHEMA = '{schema_name}'
+                ORDER BY TABLE_NAME
+            """)
+
+            if not tables_result.success:
+                raise Exception(
+                    f"No se pudieron obtener tablas: {tables_result.error}"
+                )
+
+            tables = [row["TABLE_NAME"] for row in tables_result.data]
+            logger.info(f"  → {len(tables)} tablas encontradas")
+
+            for table_name in tables:
+                schema_text += f"\nTABLA: {table_name}\n" + "-" * 40 + "\n"
+
+                # Columnas
+                cols_result = connector.execute_query(f"""
+                    SELECT
+                        COLUMN_NAME,
+                        DATA_TYPE,
+                        CHARACTER_MAXIMUM_LENGTH,
+                        IS_NULLABLE
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_NAME = '{table_name}'
+                      AND TABLE_SCHEMA = '{schema_name}'
+                    ORDER BY ORDINAL_POSITION
+                """)
+
+                if cols_result.success:
+                    for col in cols_result.data:
+                        col_name = col["COLUMN_NAME"]
+                        col_type = col["DATA_TYPE"]
+                        col_len = col.get("CHARACTER_MAXIMUM_LENGTH")
+                        type_str = (
+                            f"{col_type}({col_len})"
+                            if col_len and col_len > 0
+                            else col_type
+                        )
+                        nullable = "" if col.get("IS_NULLABLE") == "YES" else " [NOT NULL]"
+                        schema_text += f"  {col_name:30} {type_str}{nullable}\n"
+
+                # Ejemplos de datos (ayudan al LLM a inferir contenido)
+                try:
+                    # Agregado: sintaxis compatible con SQL Server y PostgreSQL
+                    # SQL Server usa TOP, PostgreSQL usa LIMIT
+                    if db_type.lower() == "sqlserver":
+                        sample_sql = f"SELECT TOP 2 * FROM {table_name}"
+                    else:
+                        sample_sql = f"SELECT * FROM {table_name} LIMIT 2"
+
+                    sample = connector.execute_query(sample_sql)
+                    if sample.success and sample.data:
+                        schema_text += "Ejemplos:\n"
+                        for idx, row in enumerate(sample.data, 1):
+                            pairs = [
+                                f"{k}={str(v)[:25]}"
+                                for k, v in list(row.items())[:5]
+                            ]
+                            schema_text += f"  Fila {idx}: {', '.join(pairs)}\n"
+                except Exception:
+                    pass
+
+                schema_text += "\n"
+
+            return schema_text
+
+        except Exception as e:
+            logger.error(f"❌ Error cargando schema de {db_name}: {e}")
+            raise
+
+    # ── MÉTODOS DE SOPORTE ────────────────────────────────────────────────
+
+    def _enrich_with_history(
+        self, question: str, history: list, tracer: QueryTracer
+    ) -> str:
+        if not history:
+            return question
+        recent = history[-4:]
+        context = "\n".join(
+            f"{'Usuario' if m['role']=='user' else 'Asistente'}: {m['content']}"
+            for m in recent
+        )
         try:
             response = self.client.chat.completions.create(
                 model=self.deployment,
@@ -112,160 +426,148 @@ EXPLICACIÓN:
                     {
                         "role": "system",
                         "content": (
-                            "Eres experto en SQL Server T-SQL. Tu ÚNICA tarea es convertir preguntas naturales "
-                            "a UN ÚNICO statement SELECT compatible con SQL Server. NADA MÁS.\n\n"
-                            "REGLAS ABSOLUTAS (SQL SERVER 2019+):\n"
-                            "- Generas SOLO SELECT (nunca CREATE, UPDATE, DELETE, DROP)\n"
-                            "- NUNCA múltiples statements\n"
-                            "- NUNCA semicolons (;)\n"
-                            "- NUNCA comentarios (--)\n"
-                            "- NUNCA uses LIMIT (eso es PostgreSQL) - usa TOP en lugar de LIMIT\n"
-                            "- Las columnas con espacios van con [brackets]: [Order Date], [Net Price]\n"
-                            "- Las funciones de fecha usa YEAR(), MONTH(), DAY() o DATEPART()\n"
-                            "- Usa alias de tabla (s, c, p, d, st, etc.)\n"
-                            "- SIEMPRE enciera alias y nombres con espacios en [brackets]\n"
-                            "- Para LIMIT equivalente, usa: TOP n para simple, OFFSET x ROWS FETCH NEXT n ROWS ONLY para offset\n"
-                            "- NO uses d.Date, usa d.[Date] con brackets\n\n"
-                            + self.schema_prompt
+                            "Reformulá la pregunta actual como pregunta autónoma "
+                            "usando el contexto si es necesario. "
+                            "Si ya es completa, devolvela igual. Solo la pregunta."
                         )
                     },
                     {
                         "role": "user",
-                        "content": user_message
+                        "content": f"Contexto:\n{context}\n\nPregunta: {question}"
                     }
                 ],
-                max_tokens=800,
-                temperature=0.2  # Temperatura aún más baja para ser determinista
+                max_tokens=150, temperature=0.1
             )
-            
-            full_response = response.choices[0].message.content
-            
-            # Extraer SQL del response
-            sql_match = re.search(r'```sql\n(.*?)\n```', full_response, re.DOTALL)
-            if sql_match:
-                sql = sql_match.group(1).strip()
-            else:
-                # Si no encuentra el patrón sql, intenta extraer cualquier código
-                sql_match = re.search(r'```\n(.*?)\n```', full_response, re.DOTALL)
-                if sql_match:
-                    sql = sql_match.group(1).strip()
-                else:
-                    sql = "NO SE PUDO EXTRAER SQL"
-            
-            # Extraer explicación
-            parts = full_response.split("EXPLICACIÓN:")
-            explanation = parts[1].strip() if len(parts) > 1 else ""
-            
-            # Validar la SQL
-            validation_result = self._validate_sql(sql)
-            
-            result = {
-                "natural_query": natural_language_query,
-                "sql": sql,
-                "explanation": explanation,
-                "valid": validation_result["valid"],
-                "validation_notes": validation_result["notes"],
-                "tables_used": validation_result["tables"],
-                "tokens_used": response.usage.total_tokens,
-                "cost_usd": (
-                    response.usage.prompt_tokens * 0.00000015 +
-                    response.usage.completion_tokens * 0.0000006
+            enriched = response.choices[0].message.content.strip()
+            if enriched != question:
+                tracer.step(
+                    archivo="nl2sql_generator",
+                    paso="enriquecer_historial",
+                    entrada=f"Original: '{question}'",
+                    accion="Reformulando con contexto de conversación",
+                    salida=f"Enriquecida: '{enriched}'"
                 )
-            }
-            
-            logger.info(f"✅ SQL generada. Válida: {validation_result['valid']}")
-            return result
-        
+            return enriched
         except Exception as e:
-            logger.error(f"❌ Error generando SQL: {e}")
-            return {
-                "error": str(e),
-                "natural_query": natural_language_query
-            }
-    
-    def _validate_sql(self, sql: str) -> dict:
-        """
-        Valida que la SQL solo use tablas/columnas del esquema.
-        
-        Args:
-            sql: Consulta SQL a validar
-            
-        Returns:
-            Diccionario con resultados de validación
-        """
-        
-        tables = set()
-        valid = True
+            logger.warning(f"⚠️ No se pudo enriquecer pregunta: {e}")
+            return question
+
+    def _validate_sql(self, sql: str, tracer: QueryTracer) -> dict:
+        import re
         notes = []
-        
-        # Regex simple para extraer FROM y JOIN
-        from_pattern = r'FROM\s+(\w+)'
-        join_pattern = r'JOIN\s+(\w+)'
-        
-        from_matches = re.findall(from_pattern, sql, re.IGNORECASE)
-        join_matches = re.findall(join_pattern, sql, re.IGNORECASE)
-        
-        all_tables = set(from_matches + join_matches)
-        
-        for table in all_tables:
-            tables.add(table)
-            if not get_table_by_name(table):
-                valid = False
-                notes.append(f"⚠️  Tabla '{table}' no existe en el esquema")
-        
-        # TODO: Validar columnas (más complejo con regex)
-        
-        return {
-            "valid": valid,
-            "tables": list(tables),
-            "notes": notes if notes else ["✅ Todas las tablas son válidas"]
-        }
+        valid = True
 
-
-# ============================================================================
-# PRUEBAS
-# ============================================================================
-
-def test_nl2sql():
-    """Pruebas del generador NL2SQL"""
-    
-    print("=" * 80)
-    print("NL2SQL GENERATOR - PRUEBAS")
-    print("=" * 80)
-    
-    generator = NL2SQLGenerator()
-    
-    # Casos de prueba
-    test_cases = [
-        "¿Cuántos beneficiarios recibieron arroz en marzo de 2024?",
-        "¿Cuál es el gasto total por beneficiario en medicamentos?",
-        "¿Qué transacciones fueron registradas después de las 22:00?",
-        "¿Cuáles son los beneficiarios de barrio Centro que recibieron más de 3 asistencias?",
-        "¿Hay inconsistencias en las transacciones registradas por usuario 'admin'?",
-    ]
-    
-    for i, query in enumerate(test_cases, 1):
-        print(f"\n{'=' * 80}")
-        print(f"PRUEBA {i}")
-        print(f"{'=' * 80}")
-        print(f"🗣️  Pregunta natural: {query}\n")
-        
-        result = generator.generate_sql(query)
-        
-        if "error" in result:
-            print(f"❌ ERROR: {result['error']}")
+        if not sql:
+            valid = False
+            notes.append("❌ SQL vacía")
+        elif not sql.strip().upper().startswith("SELECT"):
+            valid = False
+            notes.append("❌ Debe comenzar con SELECT")
         else:
-            print(f"📊 SQL Generada:")
-            print(f"{result['sql']}\n")
-            
-            print(f"📝 Explicación:")
-            print(f"{result['explanation']}\n")
-            
-            print(f"✅ Válida: {result['valid']}")
-            print(f"📋 Tablas usadas: {', '.join(result['tables_used'])}")
-            print(f"💡 Notas de validación: {', '.join(result['validation_notes'])}")
-            print(f"📈 Tokens: {result['tokens_used']} | Costo: ${result['cost_usd']:.8f}")
+            for cmd in ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "TRUNCATE"]:
+                if re.search(rf"\b{cmd}\b", sql, re.IGNORECASE):
+                    valid = False
+                    notes.append(f"❌ Comando prohibido: {cmd}")
 
+        if valid:
+            notes.append("✅ SQL válida")
 
-if __name__ == "__main__":
-    test_nl2sql()
+        tracer.step(
+            archivo="nl2sql_generator",
+            paso="validar_sql",
+            entrada=sql[:80] + "..." if len(sql) > 80 else sql,
+            accion="SELECT-only, sin comandos destructivos",
+            salida=f"valid={valid} | {notes[0]}"
+        )
+        return {"valid": valid, "notes": notes}
+
+    def _calculate_confidence(self, sql, tables, validation) -> tuple:
+        import re
+        confidence = 100.0
+        if len(re.findall(r'\bJOIN\b', sql, re.IGNORECASE)) > 3:
+            confidence -= 10
+        if not validation["valid"]:
+            confidence -= 50
+        if not tables:
+            confidence -= 20
+        confidence = max(0, min(100, confidence))
+
+        if confidence >= 90:
+            label = "🟢 Muy alta"
+        elif confidence >= 70:
+            label = "🟡 Alta"
+        elif confidence >= 50:
+            label = "🟠 Media"
+        else:
+            label = "🔴 Baja — revisar"
+        return confidence, label
+
+    def _build_reasoning(
+        self, question, enriched, sql, tables, validation, tracer
+    ) -> str:
+        data_text = (
+            f"Tablas: {', '.join(tables) if tables else 'no detectadas'}\n"
+            f"SQL válida: {'sí' if validation['valid'] else 'no'}\n"
+        )
+        if enriched != question:
+            data_text += f"Pregunta interpretada: {enriched}\n"
+        try:
+            response = self.client.chat.completions.create(
+                model=self.deployment,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Explicá en 2-3 oraciones por qué se eligieron "
+                            "estas tablas y filtros. Directo. Sin markdown."
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Pregunta: '{question}'\n{data_text}\nSQL:\n{sql}"
+                    }
+                ],
+                max_tokens=150, temperature=0.3
+            )
+            reasoning = response.choices[0].message.content.strip()
+            tracer.step(
+                archivo="nl2sql_generator",
+                paso="reasoning",
+                entrada=data_text,
+                accion="LLM redacta razonamiento",
+                salida=reasoning[:80] + "..." if len(reasoning) > 80 else reasoning
+            )
+            return reasoning
+        except Exception:
+            return f"Tablas usadas: {', '.join(tables)}."
+
+    def _generate_explanation(self, question, sql, tracer) -> str:
+        try:
+            response = self.client.chat.completions.create(
+                model=self.deployment,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "1-2 oraciones describiendo qué información va a traer "
+                            "esta consulta. Sin mencionar SQL ni tablas."
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Pregunta: '{question}'\nSQL:\n{sql}"
+                    }
+                ],
+                max_tokens=100, temperature=0.3
+            )
+            explanation = response.choices[0].message.content.strip()
+            tracer.step(
+                archivo="nl2sql_generator",
+                paso="explanation",
+                entrada=f"Pregunta: '{question}'",
+                accion="LLM genera respuesta amigable",
+                salida=explanation[:80] + "..." if len(explanation) > 80 else explanation
+            )
+            return explanation
+        except Exception:
+            return "Consulta generada correctamente."
