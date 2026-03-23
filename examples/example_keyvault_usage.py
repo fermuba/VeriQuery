@@ -1,6 +1,6 @@
 """
 Example Usage: Azure Key Vault Credential Management
-Forensic Data Guardian - Secure Credential Store
+VeriQuery - Secure Credential Store
 
 This script demonstrates how to use the SecureCredentialStore
 and PermissionValidator in your application.
@@ -234,7 +234,7 @@ async def example_7_credential_exists():
 async def main():
     """Run all examples"""
     print("\n" + "█"*70)
-    print("█ Forensic Data Guardian - Azure Key Vault Integration Examples")
+    print("█ VeriQuery - Azure Key Vault Integration Examples")
     print("█"*70)
 
     try:

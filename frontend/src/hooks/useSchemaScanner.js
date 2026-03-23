@@ -37,7 +37,14 @@ export const useSchemaScanner = () => {
       );
 
       if (!response.ok) {
-        throw new Error(`Failed to scan schema: ${response.statusText}`);
+        let errorMessage = response.statusText;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || response.statusText;
+        } catch (e) {
+          // Ignore json parse error
+        }
+        throw new Error(`Failed to scan schema: ${errorMessage}`);
       }
 
       const data = await response.json();

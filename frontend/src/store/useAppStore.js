@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { API } from '../config/endpoints'
 
-const TEST_USER = 'test_user@forensic.guardian'
+const TEST_USER = 'test_user@veriquery.local'
 
 export const useAppStore = create((set, get) => ({
   // UI state
@@ -82,6 +82,9 @@ export const useAppStore = create((set, get) => ({
       })
       if (!response.ok) throw new Error('Failed to add database')
       const data = await response.json()
+      if (data && data.success === false) {
+        throw new Error(data.message || 'Error validating database connection.')
+      }
       set(s => ({ userDatabases: [...s.userDatabases, data] }))
       return data
     } catch (err) {
@@ -96,15 +99,14 @@ export const useAppStore = create((set, get) => ({
   selectDatabase: async (dbName) => {
     set({ loadingDatabases: true, databaseError: null })
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/databases/select/${dbName}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/databases/${dbName}/activate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: TEST_USER })
+        headers: { 'Content-Type': 'application/json' }
       })
       if (!response.ok) throw new Error('Failed to select database')
       const data = await response.json()
       set({ 
-        sessionId: data.session_id,
+        sessionId: data.session_id || 'v2-session',
         selectedDatabase: dbName 
       })
       return data

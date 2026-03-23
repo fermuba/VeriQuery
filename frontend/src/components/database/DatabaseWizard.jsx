@@ -10,7 +10,7 @@ import { API } from '../../config/endpoints'
  * Steps: 1. Input → 2. Save (Key Vault)
  */
 
-const TEST_USER = 'test_user@forensic.guardian'
+const TEST_USER = 'test_user@veriquery.local'
 
 export default function DatabaseWizard({ onSuccess = () => {}, onCancel = () => {} }) {
   const [step, setStep] = useState(1) // 1: Input, 2: Loading, 3: Success
@@ -83,12 +83,11 @@ export default function DatabaseWizard({ onSuccess = () => {}, onCancel = () => 
         body: JSON.stringify(requestBody)
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || 'Failed to add database')
-      }
-
       const data = await response.json()
+      
+      if (!response.ok || (data && data.success === false)) {
+        throw new Error(data.message || data.detail || 'Failed to add database')
+      }
       setStep(3)
       
       // Notify parent after success animation

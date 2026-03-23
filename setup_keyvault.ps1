@@ -62,7 +62,7 @@ Write-Host ""
 
 $envContent = @"
 # ========================================
-# Forensic Data Guardian - Environment Variables
+# VeriQuery - Environment Variables
 # ========================================
 
 # AZURE KEY VAULT CONFIGURATION

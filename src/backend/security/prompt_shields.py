@@ -2,7 +2,7 @@
 Prompt Shields - Capa de Seguridad para NL2SQL
 ===============================================
 
-Implementa la Capa 3 de la arquitectura de seguridad para 'Forensic Data Guardian'.
+Implementa la Capa 3 de la arquitectura de seguridad para 'VeriQuery'.
 Detecta y bloquea amenazas de seguridad ANTES de llamar a Azure OpenAI.
 
 Amenazas detectadas:

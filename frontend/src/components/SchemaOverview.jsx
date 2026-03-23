@@ -92,7 +92,7 @@ export default function SchemaOverview() {
         </div>
         <div className="p-4 space-y-3 max-h-96 overflow-y-auto">
           <p className="text-sm text-gray-600 px-2">
-            Guardian puede consultar estas tablas:
+            VeriQuery puede consultar estas tablas:
           </p>
 
           {schema.tables?.map((table, idx) => (

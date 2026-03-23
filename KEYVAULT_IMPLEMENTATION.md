@@ -2,7 +2,7 @@
 
 ## 📦 What Was Created
 
-This is a complete, production-ready implementation of secure credential storage using **Azure Key Vault** for the **Forensic Data Guardian** platform.
+This is a complete, production-ready implementation of secure credential storage using **Azure Key Vault** for the **VeriQuery** platform.
 
 ### Files Created
 
@@ -252,7 +252,7 @@ pytest tests/test_keyvault_integration.py --cov=tools
 
 ```
 ┌──────────────────────────────────────┐
-│   Forensic Data Guardian API         │
+│   VeriQuery API         │
 ├──────────────────────────────────────┤
 │                                      │
 │  ┌─────────────────────────────┐   │
@@ -354,7 +354,7 @@ For issues:
 
 ---
 
-**Product:** Forensic Data Guardian  
+**Product:** VeriQuery  
 **Component:** Azure Key Vault Integration  
 **Version:** 1.0  
 **Status:** ✅ Production Ready  

@@ -1,4 +1,4 @@
-# 🔐 Azure Key Vault - Configuración para Forensic Data Guardian
+# 🔐 Azure Key Vault - Configuración para VeriQuery
 
 ## ✅ Pasos para Configurar .env
 
@@ -241,5 +241,5 @@ RELOAD=true
 
 ---
 
-**Producto:** Forensic Data Guardian  
+**Producto:** VeriQuery  
 **Última actualización:** March 20, 2026

@@ -243,23 +243,25 @@ class SchemaScanner:
                 f"UID={self.config.username};"
                 f"PWD={self.config.password};"
             )
-            conn = pyodbc_connect(conn_str)
+            conn = pyodbc_connect.connect(conn_str)
             cursor = conn.cursor()
 
-            # Get all tables
+            # Get all tables with their schemas
             cursor.execute("""
-                SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+                SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
                 WHERE TABLE_TYPE = 'BASE TABLE'
             """)
-            tables = [row[0] for row in cursor.fetchall()]
+            tables = cursor.fetchall()  # List of (schema, name) tuples
 
             schema = {}
-            for table_name in tables:
+            for schema_name, table_name in tables:
+                full_table_name = f"{schema_name}.{table_name}"
+                
                 # Get columns
                 cursor.execute(f"""
                     SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE
                     FROM INFORMATION_SCHEMA.COLUMNS
-                    WHERE TABLE_NAME = '{table_name}'
+                    WHERE TABLE_NAME = '{table_name}' AND TABLE_SCHEMA = '{schema_name}'
                 """)
                 columns = []
                 for col_name, col_type, nullable in cursor.fetchall():
@@ -272,26 +274,31 @@ class SchemaScanner:
                 # Get primary keys
                 cursor.execute(f"""
                     SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-                    WHERE TABLE_NAME = '{table_name}' AND CONSTRAINT_NAME LIKE '%PK%'
+                    WHERE TABLE_NAME = '{table_name}' AND TABLE_SCHEMA = '{schema_name}' AND CONSTRAINT_NAME LIKE '%PK%'
                 """)
                 pk_names = [row[0] for row in cursor.fetchall()]
                 for col in columns:
                     if col.name in pk_names:
                         col.is_primary_key = True
 
-                # Get row count
-                cursor.execute(f"SELECT COUNT(*) FROM [{table_name}]")
-                row_count = cursor.fetchone()[0]
+                try:
+                    # Get row count with schema prefix
+                    cursor.execute(f"SELECT COUNT(*) FROM [{schema_name}].[{table_name}]")
+                    row_count = cursor.fetchone()[0]
 
-                # Get sample data (3 rows)
-                cursor.execute(f"SELECT TOP 3 * FROM [{table_name}]")
-                sample_data = []
-                col_names = [col.name for col in columns]
-                for row in cursor.fetchall():
-                    sample_data.append(dict(zip(col_names, row)))
+                    # Get sample data (3 rows) with schema prefix
+                    cursor.execute(f"SELECT TOP 3 * FROM [{schema_name}].[{table_name}]")
+                    sample_data = []
+                    col_names = [col.name for col in columns]
+                    for row in cursor.fetchall():
+                        sample_data.append(dict(zip(col_names, row)))
+                except Exception as table_err:
+                    print(f"Warning: Could not read data from [{schema_name}].[{table_name}]: {table_err}")
+                    row_count = 0
+                    sample_data = []
 
-                schema[table_name] = TableInfo(
-                    name=table_name,
+                schema[full_table_name] = TableInfo(
+                    name=full_table_name,
                     columns=columns,
                     row_count=row_count,
                     sample_data=sample_data,

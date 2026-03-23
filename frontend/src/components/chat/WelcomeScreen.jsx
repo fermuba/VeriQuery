@@ -50,7 +50,7 @@ export default function WelcomeScreen() {
     {
       number: '2',
       title: 'Verifica conexión',
-      description: 'Guardian probará acceso a tu BD',
+      description: 'VeriQuery probará acceso a tu BD',
       icon: Lock,
       highlight: 'Tus credenciales se guardan de forma segura',
     },
@@ -92,7 +92,7 @@ export default function WelcomeScreen() {
         </motion.div>
 
         <h1 className="text-3xl font-bold text-foreground">
-          Bienvenido a Guardian
+          Bienvenido a VeriQuery
         </h1>
         <p className="text-lg text-muted-foreground">
           Auditoría forense inteligente con IA
