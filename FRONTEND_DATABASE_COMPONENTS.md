@@ -349,7 +349,7 @@ const [formData, setFormData] = useState(initialConfig || { ... })
 
 ## 📝 License & Support
 
-**Product:** Forensic Data Guardian  
+**Product:** VeriQuery  
 **Component:** Database Configuration Frontend  
 **Version:** 1.0  
 **Last Updated:** March 2026  

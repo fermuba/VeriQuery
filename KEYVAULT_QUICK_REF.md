@@ -254,6 +254,6 @@ FLUSH PRIVILEGES;
 
 ---
 
-**Forensic Data Guardian | Azure Key Vault v1.0**
+**VeriQuery | Azure Key Vault v1.0**
 
 For detailed info: See documentation files in `docs/`

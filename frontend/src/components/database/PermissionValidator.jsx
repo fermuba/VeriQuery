@@ -123,7 +123,7 @@ FLUSH PRIVILEGES;`
           className="bento-card p-4 border-l-4 border-warning bg-warning/5 space-y-3"
         >
           <p className="text-sm text-foreground font-medium">
-            For Forensic Data Guardian, we recommend using read-only database users. 
+            For VeriQuery, we recommend using read-only database users. 
             Here's how to create one:
           </p>
 

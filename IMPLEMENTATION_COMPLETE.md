@@ -2,7 +2,7 @@
 
 ## 📊 Session Summary
 
-**Project:** Forensic Data Guardian  
+**Project:** VeriQuery  
 **Feature:** Secure Credential Storage with Azure Key Vault  
 **Date:** March 20, 2026  
 **Status:** ✅ Complete & Production-Ready  
@@ -431,7 +431,7 @@ pytest tests/test_keyvault_integration.py --cov=tools
 
 ## ✅ Summary
 
-**Forensic Data Guardian** now has a **complete, production-ready system** for managing database credentials securely with Azure Key Vault.
+**VeriQuery** now has a **complete, production-ready system** for managing database credentials securely with Azure Key Vault.
 
 - 🔐 **Secure:** Passwords encrypted, never stored locally
 - 🎯 **Smart:** Auto-validates read-only permissions
@@ -446,5 +446,5 @@ pytest tests/test_keyvault_integration.py --cov=tools
 
 ---
 
-Made with ❤️ for Forensic Data Guardian  
+Made with ❤️ for VeriQuery  
 Azure Key Vault Integration v1.0

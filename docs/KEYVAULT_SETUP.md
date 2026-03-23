@@ -1,5 +1,5 @@
 """
-Azure Key Vault Configuration Guide for Forensic Data Guardian
+Azure Key Vault Configuration Guide for VeriQuery
 
 This file documents how to set up Azure Key Vault integration for secure
 credential storage.
@@ -235,7 +235,7 @@ SETUP INSTRUCTIONS:
 
 10. PRODUCT INFORMATION
     ===================
-    Product: Forensic Data Guardian
+    Product: VeriQuery
     Component: Secure Credential Store with Azure Key Vault
     Version: 1.0
     Last Updated: March 2026

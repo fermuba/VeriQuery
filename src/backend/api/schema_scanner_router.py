@@ -32,7 +32,7 @@ class SchemaScanRequest(BaseModel):
 
 
 class SchemaResponse(BaseModel):
-    schema_data: Dict
+    tables: list
     database_name: Optional[str] = None
     error: Optional[str] = None
 
@@ -58,9 +58,18 @@ async def scan_schema(request: SchemaScanRequest):
     
     if error:
         raise HTTPException(status_code=400, detail=error)
+        
+    tables_list = []
+    for table_name, data in schema.items():
+        tables_list.append({
+            "name": table_name,
+            "columns": data["columns"],
+            "record_count": data["row_count"],
+            "sample_data": data["sample_data"]
+        })
     
     return SchemaResponse(
-        schema_data=schema,
+        tables=tables_list,
         database_name=request.database_name,
         error=None,
     )
@@ -76,9 +85,18 @@ async def get_cached_schema():
     
     if error:
         raise HTTPException(status_code=400, detail=error)
+        
+    tables_list = []
+    for table_name, data in schema.items():
+        tables_list.append({
+            "name": table_name,
+            "columns": data["columns"],
+            "record_count": data["row_count"],
+            "sample_data": data["sample_data"]
+        })
     
     return SchemaResponse(
-        schema_data=schema,
+        tables=tables_list,
         database_name=db_connector.active_database.name,
         error=None,
     )

@@ -1,5 +1,5 @@
 """
-FORENSIC DATA GUARDIAN - API REST
+VERIQUERY - API REST
 ==================================
 Enterprise-grade API with:
 - Security validation (PromptShield)
@@ -97,7 +97,7 @@ async def lifespan(app: FastAPI):
     """
     
     logger.info("=" * 70)
-    logger.info("FORENSIC DATA GUARDIAN - STARTING UP")
+    logger.info("VERIQUERY - STARTING UP")
     logger.info("=" * 70)
     
     try:
@@ -145,7 +145,7 @@ async def lifespan(app: FastAPI):
     # ========== SHUTDOWN ==========
     
     logger.info("=" * 70)
-    logger.info("FORENSIC DATA GUARDIAN - SHUTTING DOWN")
+    logger.info("VERIQUERY - SHUTTING DOWN")
     logger.info("=" * 70)
     
     try:
@@ -164,7 +164,7 @@ async def lifespan(app: FastAPI):
 # ============================================================================
 
 app = FastAPI(
-    title="Forensic Data Guardian API",
+    title="VeriQuery API",
     description="Enterprise API for forensic data queries with NL-to-SQL translation",
     version="1.0.0",
     lifespan=lifespan
@@ -182,6 +182,7 @@ app.add_middleware(
         "http://127.0.0.1:5174",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:8080",
+        "*"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -295,7 +296,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 async def root():
     """Get API information."""
     return {
-        "name": "Forensic Data Guardian API",
+        "name": "VeriQuery API",
         "version": "1.0.0",
         "status": "running",
         "endpoints": {
@@ -951,7 +952,7 @@ def _format_natural_language_answer(question: str, data: List[Dict[str, Any]]) -
 async def root():
     """Información de la API"""
     return {
-        "name": "Forensic Data Guardian",
+        "name": "VeriQuery",
         "version": "1.0.0",
         "endpoints": {
             "POST /api/query": "Procesar consulta en lenguaje natural",

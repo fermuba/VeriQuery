@@ -1,8 +1,8 @@
-# Azure Key Vault Integration - Forensic Data Guardian
+# Azure Key Vault Integration - VeriQuery
 
 ## 🔐 Overview
 
-The Forensic Data Guardian API now includes secure credential storage using **Azure Key Vault**. This ensures that all database credentials are encrypted and managed centrally, rather than stored in plain text files.
+The VeriQuery API now includes secure credential storage using **Azure Key Vault**. This ensures that all database credentials are encrypted and managed centrally, rather than stored in plain text files.
 
 ### Key Features
 
@@ -361,7 +361,7 @@ ENV KEYVAULT_URL=$KEYVAULT_URL
 
 ## 📝 License & Support
 
-**Product:** Forensic Data Guardian
+**Product:** VeriQuery
 **Component:** Azure Key Vault Integration
 **Version:** 1.0
 **Last Updated:** March 2026

@@ -76,7 +76,7 @@ class DatabaseSaveResponse(BaseModel):
 
 
 class DatabaseConfig(BaseModel):
-    name: str
+    db_name: str
     db_type: str
     host: Optional[str] = None
     port: Optional[int] = None
@@ -87,7 +87,7 @@ class DatabaseConfig(BaseModel):
 
 
 class DatabaseListResponse(BaseModel):
-    databases: List[str]
+    databases: List[DatabaseConfig]
     active: Optional[str] = None
 
 
@@ -215,7 +215,7 @@ async def save_database_config(request: DatabaseSaveRequest):
                 if not is_readonly:
                     warnings.append(
                         "⚠ WARNING: This database connection has write permissions. "
-                        "For Forensic Data Guardian, read-only access is recommended."
+                        "For VeriQuery, read-only access is recommended."
                     )
                     logger.warning(f"Non-read-only connection: {request.name}")
             else:
@@ -304,10 +304,27 @@ async def save_database_config(request: DatabaseSaveRequest):
 @router.get("", response_model=DatabaseListResponse)
 async def list_databases():
     """List all saved database configurations"""
-    databases = db_connector.list_databases()
+    database_names = db_connector.list_databases()
+    databases = []
     active = None
     if db_connector.active_database:
         active = db_connector.active_database.name
+        
+    for name in database_names:
+        info = db_connector.get_database_info(name)
+        if info:
+            db_obj = {
+                "db_name": name,
+                "db_type": info.get("db_type", ""),
+                "host": info.get("host"),
+                "port": info.get("port"),
+                "database": info.get("database", ""),
+                "username": info.get("username"),
+                "filepath": info.get("filepath"),
+                "active": (name == active)
+            }
+            databases.append(DatabaseConfig(**db_obj))
+            
     return DatabaseListResponse(databases=databases, active=active)
 
 
@@ -317,7 +334,14 @@ async def get_database_info(database_name: str):
     info = db_connector.get_database_info(database_name)
     if not info:
         raise HTTPException(status_code=404, detail=f"Database '{database_name}' not found")
-    return DatabaseDetailsResponse(database=DatabaseConfig(**info))
+    
+    info_dict = info.copy()
+    if 'name' in info_dict:
+        info_dict['db_name'] = info_dict.pop('name')
+    elif 'db_name' not in info_dict:
+        info_dict['db_name'] = database_name
+        
+    return DatabaseDetailsResponse(database=DatabaseConfig(**info_dict))
 
 
 @router.delete("/{database_name}", response_model=Dict)
@@ -515,7 +539,7 @@ async def get_keyvault_status():
                 "enabled": True,
                 "status": "✓ Connected",
                 "vault_url": cred_store.key_vault_url,
-                "product": "Forensic Data Guardian"
+                "product": "VeriQuery"
             }
         else:
             return {

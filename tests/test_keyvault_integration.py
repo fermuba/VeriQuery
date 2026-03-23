@@ -1,6 +1,6 @@
 """
 Unit Tests for Azure Key Vault Integration
-Forensic Data Guardian
+VeriQuery
 
 Run with: pytest test_keyvault_integration.py
 """

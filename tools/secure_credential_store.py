@@ -1,6 +1,6 @@
 """
 Secure Credential Store using Azure Key Vault
-Manages database credentials securely for Forensic Data Guardian
+Manages database credentials securely for VeriQuery
 """
 
 from azure.keyvault.secrets import SecretClient
@@ -120,7 +120,7 @@ class SecureCredentialStore:
                 "username": config.get("username"),
                 "filepath": config.get("filepath"),
                 "saved_at": datetime.utcnow().isoformat(),
-                "product": "Forensic Data Guardian"
+                "product": "VeriQuery"
             }
 
             # Store password separately in secret value
