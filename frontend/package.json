@@ -10,10 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@azure/msal-browser": "^5.6.1",
+    "@azure/msal-react": "^5.1.0",
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.577.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.2",
     "recharts": "^3.8.0",
     "zustand": "^5.0.12"
   },

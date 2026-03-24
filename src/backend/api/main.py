@@ -119,12 +119,16 @@ async def lifespan(app: FastAPI):
         app_state.db_connector = get_database_connector()
         logger.info(f"✅ Database connector created: {app_state.db_connector}")
         
-        if app_state.db_connector.connect():
-            app_state.db_healthy = True
-            is_healthy, message = app_state.db_connector.health_check()
-            logger.info(f"✅ Database health check: {message}")
-        else:
-            logger.warning("⚠️  Database connector created but connection failed")
+        try:
+            if app_state.db_connector.connect():
+                app_state.db_healthy = True
+                is_healthy, message = app_state.db_connector.health_check()
+                logger.info(f"✅ Database health check: {message}")
+            else:
+                logger.warning("⚠️  Database connector created but connection failed")
+                app_state.db_healthy = False
+        except Exception as db_error:
+            logger.warning(f"⚠️  Database connection failed (non-fatal): {db_error}")
             app_state.db_healthy = False
         
         # 5. Log startup summary
