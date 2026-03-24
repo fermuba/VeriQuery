@@ -14,38 +14,38 @@ export default function Header() {
   }
 
   return (
-    <header className="h-20 glass-surface border-b border-border flex items-center justify-between px-8 shrink-0 z-10">
+    <header className="h-20 glass-surface border-b border-border flex items-center justify-between px-8 shrink-0 z-40">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-md bg-primary flex items-center justify-center">
-          <Shield className="w-6 h-6 text-primary-foreground" strokeWidth={1.5} />
+        <div className="w-10 h-10 rounded-md bg-slate-800 flex items-center justify-center">
+          <Shield className="w-6 h-6 text-white" strokeWidth={1.5} />
         </div>
         <div>
-          <h1 className="text-lg font-bold text-primary tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>VeriQuery</h1>
+          <h1 className="text-lg font-bold text-slate-800 tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>VeriQuery</h1>
           <p className="text-xs text-muted-foreground tracking-wide uppercase">Forensic Data Analysis</p>
         </div>
       </div>
 
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 px-4 py-2 rounded-md bg-success/10">
-          <ShieldCheck className="w-5 h-5 text-success" strokeWidth={1.5} />
-          <span className="text-sm font-medium text-success">Sistema Protegido</span>
+        <div className="flex items-center gap-2 px-4 py-2 rounded-md bg-green-600/20 border border-green-600/30">
+          <ShieldCheck className="w-5 h-5 text-green-700" strokeWidth={1.5} />
+          <span className="text-sm font-medium text-green-700" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Sistema Protegido</span>
         </div>
 
         {/* User Menu */}
         {user && (
-          <div className="relative">
+          <div className="relative z-50">
             <button
               onClick={() => setShowMenu(!showMenu)}
               className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-muted transition-colors"
             >
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                <User className="w-4 h-4 text-primary" strokeWidth={1.5} />
+              <div className="w-8 h-8 rounded-full bg-slate-800/20 flex items-center justify-center">
+                <User className="w-4 h-4 text-slate-800" strokeWidth={1.5} />
               </div>
               <span className="text-sm font-medium text-foreground">{user.name || 'Usuario'}</span>
             </button>
 
             {showMenu && (
-              <div className="absolute right-0 mt-2 w-48 rounded-md bg-popover border border-border shadow-lg z-20">
+              <div className="absolute right-0 mt-2 w-48 rounded-md bg-white border border-border shadow-xl z-50">
                 <div className="p-3 border-b border-border">
                   <p className="text-xs text-muted-foreground">Conectado como</p>
                   <p className="text-sm font-medium text-foreground truncate">{user.email}</p>
