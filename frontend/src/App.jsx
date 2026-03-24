@@ -7,7 +7,6 @@ import ChatContainer from './components/chat/ChatContainer'
 import DataPreviewPanel from './components/data/DataPreviewPanel'
 import SecurityBadge from './components/security/SecurityBadge'
 import WelcomeScreen from './components/layout/WelcomeScreen'
-import DebugPanel from './components/debug/DebugPanel'
 import { useAppStore } from './store/useAppStore'
 import { useBackendConnection } from './hooks/useBackend'
 
@@ -46,7 +45,6 @@ function MainApp() {
 export default function App() {
   return (
     <AuthInitializer>
-      <DebugPanel />
       <Routes>
         {/* Public route - Login */}
         <Route path="/login" element={<Login />} />
