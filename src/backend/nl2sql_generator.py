@@ -26,6 +26,7 @@ from openai import AzureOpenAI
 from src.backend.agents.intent_validator import IntentValidator
 from src.backend.agents.semantic_validator import SemanticValidator
 from src.backend.agents.query_crafter import QueryCrafter
+from src.backend.agents.sql_normalizer import SQLNormalizer
 from src.backend.database.factory import get_database_connector
 from src.backend.core.tracer import QueryTracer
 
@@ -68,6 +69,7 @@ class NL2SQLGenerator:
         self.intent_validator = IntentValidator(azure_client=self.client)
         self.semantic_validator = SemanticValidator(azure_client=self.client)
         self.query_crafter = QueryCrafter(azure_client=self.client)
+        self.sql_normalizer = SQLNormalizer()
 
         self._load_default_database()
         logger.info("✅ NL2SQLGenerator inicializado")
@@ -212,28 +214,60 @@ class NL2SQLGenerator:
                 "trace_steps": trace_data
             }
 
-        # ── PASO 2: Validar intención (reemplaza al AmbiguityDetector) ────
-        tracer.step(
-            archivo="intent_validator",
-            paso="clasificar",
-            entrada=natural_language_query,
-            accion="Clasificando intención vía LLM (GENERAR_SQL / NECESITA_ACLARACION / NO_SOPORTADO)",
-            salida="pendiente..."
+        # ── PASO 2: Historial (Enriquecer contexto antes de clasificar) ───
+        enriched_query = self._enrich_with_history(
+            natural_language_query, conversation_history, tracer
         )
 
-        intent = self.intent_validator.validate(
-            question=natural_language_query,
-            schema_info=schema_info,
-            history=conversation_history
+        # ── PASO 2b: Detectar si el usuario está respondiendo una aclaración ─
+        # Si el último mensaje del asistente fue una pregunta de aclaración,
+        # el usuario ya está respondiendo — no re-preguntar, generar SQL directo.
+        _last_was_clarification = (
+            len(conversation_history) >= 2
+            and conversation_history[-1].get("role") == "assistant"
+            and conversation_history[-1].get("type") == "necesita_aclaracion"
         )
 
-        tracer.step(
-            archivo="intent_validator",
-            paso="resultado",
-            entrada=natural_language_query,
-            accion=f"Decisión: {intent['decision']}",
-            salida=intent.get("reason", "")[:120]
-        )
+        # ── PASO 3: Validar intención ─────────────────────────────────────
+        if _last_was_clarification:
+            # Bypass total del IntentValidator: el usuario ya respondió la aclaración.
+            # La pregunta ya fue enriquecida con el historial en PASO 2.
+            intent = {
+                "decision": "GENERAR_SQL",
+                "reason": "Respuesta directa a aclaración previa — bypass IntentValidator",
+                "clarification_question": None,
+                "clarification_options": None,
+            }
+            tracer.step(
+                archivo="intent_validator",
+                paso="bypass_aclaracion",
+                entrada=enriched_query[:80],
+                accion="Última respuesta del asistente era aclaración → GENERAR_SQL forzado",
+                salida="GENERAR_SQL (bypass)"
+            )
+        else:
+            tracer.step(
+                archivo="intent_validator",
+                paso="clasificar",
+                entrada=enriched_query[:80],
+                accion="Clasificando intención vía LLM (GENERAR_SQL / NECESITA_ACLARACION / NO_SOPORTADO)",
+                salida="pendiente..."
+            )
+
+            intent = self.intent_validator.validate(
+                question=enriched_query,
+                schema_info=schema_info,
+                history=conversation_history
+            )
+
+            tracer.step(
+                archivo="intent_validator",
+                paso="resultado",
+                entrada=natural_language_query,
+                accion=f"Decisión: {intent['decision']}",
+                salida=intent.get("reason", "")[:120]
+            )
+
 
         if intent["decision"] == "NECESITA_ACLARACION":
             tracer.set_decision("ACLARACION")
@@ -256,11 +290,6 @@ class NL2SQLGenerator:
                 "natural_query": natural_language_query,
                 "trace_steps": trace_data
             }
-
-        # ── PASO 3: Historial ─────────────────────────────────────────────
-        enriched_query = self._enrich_with_history(
-            natural_language_query, conversation_history, tracer
-        )
 
         # ── PASO 4: Generar SQL ───────────────────────────────────────────
         crafter_result = self.query_crafter.generate_sql(
@@ -288,22 +317,47 @@ class NL2SQLGenerator:
         if "ERROR:SCHEMA" in sql_raw:
             tracer.step(
                 archivo="query_crafter",
-                paso="error_schema",
+                paso="error_schema_rescate",
                 entrada=sql_raw[:80],
-                accion="El modelo indicó que el schema no soporta la pregunta",
-                salida="NO_SOPORTADO → sin ejecución"
+                accion="Schema insuficiente o ambiguo. Disparando agente de rescate.",
+                salida="Generando pregunta de aclaración específica..."
             )
-            tracer.set_decision("RECHAZO")
+            clarification_msg = self._generate_rescue_clarification(
+                natural_language_query,
+                schema_info,
+                tracer
+            )
+            tracer.set_decision("ACLARACION")
             trace_data = tracer.finalize()
             return {
-                "type": "no_soportado",
-                "reason": "La pregunta no puede responderse con el schema de la base de datos activa.",
+                "type": "necesita_aclaracion",
+                "reason": "Falta información específica o hay ambigüedad para mapear el schema.",
+                "clarification_question": clarification_msg,
                 "natural_query": natural_language_query,
                 "trace_steps": trace_data
             }
 
-        sql = crafter_result["sql"]
+        raw_sql = crafter_result["sql"]
         tables_used = crafter_result.get("tables_used", [])
+
+        # ── PASO 4c: Normalización AST (sqlglot) ─────────────────────────
+        norm_result = self.sql_normalizer.normalize(
+            sql=raw_sql,
+            dialect_db_type=self._active_db_type,
+            tracer=tracer
+        )
+
+        if not norm_result["success"]:
+            tracer.error("sql_normalizer", "normalize", norm_result["error"], raw_sql)
+            tracer.set_decision("RECHAZO")
+            trace_data = tracer.finalize()
+            return {
+                "type": "error",
+                "message": f"Error de sintaxis en la consulta generada: {norm_result['error']}",
+                "trace_steps": trace_data
+            }
+
+        sql = norm_result["normalized_sql"]
 
         # ── PASO 5: Validación estructural SQL ────────────────────────────
         validation = self._validate_sql(sql, tracer)
@@ -312,13 +366,15 @@ class NL2SQLGenerator:
         tracer.step(
             archivo="semantic_validator",
             paso="validar",
-            entrada=f"Pregunta: '{natural_language_query[:60]}'",
+            # Fix 2: usar enriched_query para que el validador compare contra
+            # la intención COMPLETA, no contra la respuesta corta del usuario
+            entrada=f"Pregunta enriquecida: '{enriched_query[:60]}'",
             accion="Verificando que el SQL responde la pregunta",
             salida="pendiente..."
         )
 
         semantic = self.semantic_validator.validate(
-            question=natural_language_query,
+            question=enriched_query,   # Fix 2: enriquecida, no la original corta
             sql=sql
         )
 
@@ -331,12 +387,17 @@ class NL2SQLGenerator:
         )
 
         if not semantic["valid"]:
+            # Fix 3: usar rescue_clarification con schema real en lugar de
+            # la pregunta genérica que causa bucle infinito
+            clarification_msg = self._generate_rescue_clarification(
+                enriched_query, schema_info, tracer
+            )
             tracer.set_decision("ACLARACION")
             trace_data = tracer.finalize()
             return {
                 "type": "necesita_aclaracion",
                 "reason": semantic["reason"],
-                "clarification_question": "¿Podés reformular la pregunta con más detalle?",
+                "clarification_question": clarification_msg,
                 "natural_query": natural_language_query,
                 "trace_steps": trace_data
             }
@@ -468,14 +529,19 @@ class NL2SQLGenerator:
                     {
                         "role": "system",
                         "content": (
-                            "Reformulá la pregunta actual como pregunta autónoma "
-                            "usando el contexto si es necesario. "
-                            "Si ya es completa, devolvela igual. Solo la pregunta."
+                            "Eres un experto en reconstrucción de contexto. Tu tarea es tomar un historial de chat "
+                            "y la respuesta actual del usuario (que puede ser corta como 'Sí', 'Net price') "
+                            "y FUSIONARLA con la pregunta original del usuario para formar una única petición completa.\n"
+                            "Ejemplo:\n"
+                            "Historial:\nUsuario: Ventas por país\nAsistente: ¿Importe o Cantidad?\n"
+                            "Actual: Importe\n"
+                            "Tu salida: Dame el importe de ventas por país\n\n"
+                            "NO respondas a la pregunta, SOLO devuelve la nueva oración reformulada de forma directa y clara."
                         )
                     },
                     {
                         "role": "user",
-                        "content": f"Contexto:\n{context}\n\nPregunta: {question}"
+                        "content": f"Historial:\n{context}\n\nActual: {question}\n\nOrden completa reformulada:"
                     }
                 ],
                 max_tokens=150, temperature=0.1
@@ -613,3 +679,40 @@ class NL2SQLGenerator:
             return explanation
         except Exception:
             return "Consulta generada correctamente."
+
+    def _generate_rescue_clarification(self, question: str, schema_info: str, tracer: QueryTracer) -> str:
+        try:
+            response = self.client.chat.completions.create(
+                model=self.deployment,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Eres un analista de datos hablando con un usuario. "
+                            "Intentaste generar un reporte SQL para la pregunta provista, "
+                            "pero te faltó información o tuviste una duda clave sobre cómo mapear "
+                            "sus términos con el schema exacto de la base de datos.\n"
+                            "Observa el schema y la pregunta. Formula UNA ÚNICA y BREVE pregunta "
+                            "directa al usuario para aclarar exactamente qué campo o dato intentar cruzar. "
+                            "Por ejemplo: '¿Con ventas te refieres a la Cantidad (Quantity) o al Importe (Net Price)?' "
+                            "No des explicaciones técnicas, solo haz la pregunta amigable."
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Schema:\n{schema_info}\n\nPregunta del usuario: '{question}'"
+                    }
+                ],
+                max_tokens=150, temperature=0.2
+            )
+            clarification = response.choices[0].message.content.strip()
+            tracer.step(
+                archivo="nl2sql_generator",
+                paso="rescue_clarification",
+                entrada=f"Pregunta: '{question}'",
+                accion="LLM genera pregunta de rescate",
+                salida=clarification[:80] + "..." if len(clarification) > 80 else clarification
+            )
+            return clarification
+        except Exception as e:
+            return "Parece que me falta contexto para responder. ¿Podrías darme más detalles sobre qué datos exactos buscas?"

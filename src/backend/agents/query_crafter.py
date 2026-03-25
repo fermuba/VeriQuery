@@ -46,7 +46,10 @@ Solo podés devolver:
 A) Un SELECT válido en T-SQL (sin markdown, sin comentarios, sin ;)
 B) ERROR:SCHEMA si no es posible responder con el schema
 
-NUNCA inventes tablas, columnas ni valores.
+NUNCA inventes tablas, columnas ni valores que no existan en el schema.
+Sin embargo, SÉ FLEXIBLE Y RAZONABLE: si el usuario pide "ventas", infiere lógicamente que se refiere a [Net Price], [Quantity] o similar. Si pide "país", busca [Country] o [Country Code].
+Aplica sentido común para mapear sinónimos.
+Solo devuelve ERROR:SCHEMA si es absolutamente estéril o falta información clave vital.
 
 ## REGLAS
 

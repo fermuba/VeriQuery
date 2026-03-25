@@ -272,7 +272,7 @@ class IntentValidator:
             user_content = f"""{history_context}Pregunta actual: "{question}"
 
 Schema activo:
-{schema_info[3000:]}"""  # Se envía completo, ya que ahora es compacto
+{schema_info}"""  # Schema completo — formato compacto no necesita truncado
             # 🔍 DEBUG: ver qué schema recibe el modelo
             print("\n===== SCHEMA ENVIADO AL LLM =====")
             print(schema_info[:1000])  # solo preview para no saturar
