@@ -201,6 +201,7 @@ app.include_router(ambiguity_router)
 class QueryRequest(BaseModel):
     """User natural language query request."""
     question: str = Field(..., min_length=1, max_length=500)
+    history: Optional[List[Dict[str, str]]] = Field(default_factory=list, description="Chat history for context")
     user_id: Optional[str] = Field(default="demo_user", description="User identifier")
     organization_id: Optional[int] = Field(default=1, description="Organization ID")
     
@@ -208,6 +209,7 @@ class QueryRequest(BaseModel):
         "json_schema_extra": {
             "example": {
                 "question": "¿Cuántos clientes tenemos?",
+                "history": [{"role": "user", "content": "ventas?"}, {"role": "assistant", "content": "¿De qué tipo?"}],
                 "user_id": "user@example.com",
                 "organization_id": 1
             }
@@ -230,6 +232,7 @@ class QueryResponse(BaseModel):
     row_count: int = Field(default=0, description="Number of rows returned")
     confidence: Optional[float] = Field(default=None, ge=0, le=100)
     error: Optional[str] = Field(default=None, description="Error message if failed")
+    clarification_options: Optional[List[str]] = Field(default=None, description="Options for user to clarify ambiguous query")
     metadata: Dict[str, Any] = Field(default_factory=dict)
     
     model_config = {
@@ -479,21 +482,73 @@ async def process_query(request: QueryRequest) -> QueryResponse:
                 metadata={"execution_time_ms": _get_elapsed_ms(start_time)}
             )
         
-        logger.debug(f"[{query_id}] Generating SQL from natural language")
-        sql_result = app_state.nl2sql_gen.generate_sql(request.question)
-        
-        if "error" in sql_result or not sql_result.get("sql"):
-            logger.error(f"[{query_id}] SQL generation failed: {sql_result.get('error')}")
+        logger.debug(f"[{query_id}] Generating SQL from natural language with context")
+        sql_result = app_state.nl2sql_gen.generate_sql(
+            natural_language_query=request.question,
+            conversation_history=request.history
+        )
+
+        # =====================================================================
+        # v2: MANEJAR LOS 3 TIPOS DE RESPUESTA DEL GENERADOR
+        # =====================================================================
+        result_type = sql_result.get("type", "answer")
+
+        # Metadata base con info de conexión para evitar que el front crashee
+        base_metadata = {
+            "execution_time_ms": _get_elapsed_ms(start_time),
+            "query_id": query_id,
+            "database_config": get_connector_info()
+        }
+
+        # -- Tipo: necesita_aclaracion ------------------------------------------
+        if result_type == "necesita_aclaracion":
+            clarification = sql_result.get(
+                "clarification_question",
+                sql_result.get("reason", "¿Podés reformular tu pregunta con más detalle?")
+            )
+            logger.info(f"[{query_id}] Respuesta tipo NECESITA_ACLARACION")
+            return QueryResponse(
+                success=False,
+                answer=clarification,
+                clarification_options=sql_result.get("clarification_options"),
+                metadata={
+                    **base_metadata,
+                    "decision": "NECESITA_ACLARACION",
+                    "reason": sql_result.get("reason", ""),
+                    "trace": sql_result.get("trace_steps")
+                }
+            )
+
+        # -- Tipo: no_soportado -------------------------------------------------
+        if result_type == "no_soportado":
+            reason = sql_result.get(
+                "reason",
+                "La pregunta no puede responderse con el schema de la base de datos activa."
+            )
+            logger.info(f"[{query_id}] Respuesta tipo NO_SOPORTADO")
+            return QueryResponse(
+                success=False,
+                answer=reason,
+                metadata={
+                    **base_metadata,
+                    "decision": "NO_SOPORTADO",
+                    "trace": sql_result.get("trace_steps")
+                }
+            )
+
+        # -- Tipo: error (fallo técnico interno) --------------------------------
+        if result_type == "error" or ("error" in sql_result and not sql_result.get("sql")):
+            logger.error(f"[{query_id}] SQL generation failed: {sql_result.get('error') or sql_result.get('message')}")
             return QueryResponse(
                 success=False,
                 answer="Could not generate valid SQL query",
-                error=sql_result.get("error", "Unknown error"),
-                metadata={
-                    "execution_time_ms": _get_elapsed_ms(start_time),
-                    "query_id": query_id
-                }
+                error=sql_result.get("error") or sql_result.get("message", "Unknown error"),
+                metadata=base_metadata
             )
-        
+
+        # -- Tipo: answer (camino normal, continúa igual) -----------------------
+
+
         generated_sql = sql_result.get("sql")
         logger.info(f"[{query_id}] SQL generated successfully")
         logger.debug(f"[{query_id}] SQL:\n{generated_sql}")
