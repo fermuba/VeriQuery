@@ -9,6 +9,7 @@ from typing import Dict, Optional
 import sys
 from pathlib import Path
 import json
+import logging
 
 # Add src to path for imports
 src_path = str(Path(__file__).parent.parent)
@@ -19,6 +20,8 @@ if tools_path not in sys.path:
     sys.path.insert(0, tools_path)
 
 from database.multi_db_connector import MultiDatabaseConnector
+
+logger = logging.getLogger(__name__)
 
 # Initialize connector
 db_connector = MultiDatabaseConnector()
@@ -54,25 +57,31 @@ class SchemaExportResponse(BaseModel):
 @router.post("/scan", response_model=SchemaResponse)
 async def scan_schema(request: SchemaScanRequest):
     """Scan database schema"""
-    schema, error = db_connector.scan_schema(request.database_name)
-    
-    if error:
-        raise HTTPException(status_code=400, detail=error)
+    try:
+        schema, error = db_connector.scan_schema(request.database_name)
         
-    tables_list = []
-    for table_name, data in schema.items():
-        tables_list.append({
-            "name": table_name,
-            "columns": data["columns"],
-            "record_count": data["row_count"],
-            "sample_data": data["sample_data"]
-        })
-    
-    return SchemaResponse(
-        tables=tables_list,
-        database_name=request.database_name,
-        error=None,
-    )
+        if error:
+            logger.error(f"Schema scan error: {error}")
+            raise HTTPException(status_code=400, detail=error)
+            
+        tables_list = []
+        for table_name, data in schema.items():
+            tables_list.append({
+                "name": table_name,
+                "columns": data["columns"],
+                "record_count": data["row_count"],
+                "sample_data": data["sample_data"]
+            })
+        
+        logger.info(f"✓ Schema scan successful for database: {request.database_name}")
+        return SchemaResponse(
+            tables=tables_list,
+            database_name=request.database_name,
+            error=None,
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error during schema scan: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 
 @router.get("", response_model=SchemaResponse)
