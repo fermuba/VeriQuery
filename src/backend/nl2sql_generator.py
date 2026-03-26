@@ -399,7 +399,7 @@ class NL2SQLGenerator:
         db_type: str = "sqlserver"
     ) -> str:
         """
-        Carga schema real desde cualquier conector.
+        Carga schema real desde cualquier conector (MultiDatabaseConnector o DatabaseConnector).
 
         Agregado: db_type determina el TABLE_SCHEMA correcto:
           - sqlserver  → 'dbo'
@@ -430,12 +430,19 @@ class NL2SQLGenerator:
                 ORDER BY TABLE_NAME
             """)
 
-            if not tables_result.success:
-                raise Exception(
-                    f"No se pudieron obtener tablas: {tables_result.error}"
-                )
+            # IMPORTANTE: Manejar tanto tuplas como objetos con .success
+            if isinstance(tables_result, tuple):
+                # MultiDatabaseConnector devuelve (data, error)
+                tables_data, tables_error = tables_result
+                if tables_error:
+                    raise Exception(f"No se pudieron obtener tablas: {tables_error}")
+                tables = [row.get("TABLE_NAME") or row.get("table_name") for row in tables_data]
+            else:
+                # DatabaseConnector viejo devuelve objeto con .success
+                if not tables_result.success:
+                    raise Exception(f"No se pudieron obtener tablas: {tables_result.error}")
+                tables = [row["TABLE_NAME"] for row in tables_result.data]
 
-            tables = [row["TABLE_NAME"] for row in tables_result.data]
             logger.info(f"  → {len(tables)} tablas encontradas")
 
             for table_name in tables:
@@ -449,11 +456,22 @@ class NL2SQLGenerator:
                     ORDER BY ORDINAL_POSITION
                 """)
 
-                if cols_result.success:
-                    col_names = [col["COLUMN_NAME"] for col in cols_result.data]
-                    schema_text += f"{table_name}({', '.join(col_names)})\n"
+                # IMPORTANTE: Manejar tanto tuplas como objetos
+                if isinstance(cols_result, tuple):
+                    # MultiDatabaseConnector devuelve (data, error)
+                    cols_data, cols_error = cols_result
+                    if not cols_error:
+                        col_names = [col.get("COLUMN_NAME") or col.get("column_name") for col in cols_data]
+                        schema_text += f"{table_name}({', '.join(col_names)})\n"
+                    else:
+                        schema_text += f"{table_name}()\n"
                 else:
-                    schema_text += f"{table_name}()\n"
+                    # DatabaseConnector viejo devuelve objeto con .success
+                    if cols_result.success:
+                        col_names = [col["COLUMN_NAME"] for col in cols_result.data]
+                        schema_text += f"{table_name}({', '.join(col_names)})\n"
+                    else:
+                        schema_text += f"{table_name}()\n"
 
             return schema_text.strip()
 
