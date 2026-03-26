@@ -95,7 +95,9 @@ async def scan_schema(request: SchemaScanRequest, db_name: Optional[str] = None)
                     # Convertir schema a formato texto (similar a _load_schema_from_connector)
                     schema_text = f"=== SCHEMA: {database_name} ({config.db_type}) ===\n\n"
                     for table_name, data in schema.items():
-                        cols = ", ".join(data["columns"])
+                        # Las columnas son dicts con "name", "type", etc. Extraer solo los nombres
+                        col_names = [col["name"] for col in data["columns"]]
+                        cols = ", ".join(col_names)
                         schema_text += f"{table_name}({cols})\n"
                     
                     nl2sql_generator.set_active_schema_direct(
@@ -105,7 +107,7 @@ async def scan_schema(request: SchemaScanRequest, db_name: Optional[str] = None)
                     )
                     logger.info(f"✅ nl2sql_generator schema sincronizado para: {database_name}")
             except Exception as e:
-                logger.warning(f"⚠ Error sincronizando nl2sql_generator: {e}")
+                logger.warning(f"⚠ Error sincronizando nl2sql_generator: {e}", exc_info=True)
         
         logger.info(f"✓ Schema scan successful for database: {database_name}")
         return SchemaResponse(
