@@ -224,7 +224,8 @@ class NL2SQLGenerator:
         intent = self.intent_validator.validate(
             question=natural_language_query,
             schema_info=schema_info,
-            history=conversation_history
+            history=conversation_history,
+            tracer=tracer
         )
 
         tracer.step(
@@ -329,17 +330,28 @@ class NL2SQLGenerator:
             accion=f"Válido semánticamente: {semantic['valid']}",
             salida=semantic.get("reason", "")[:120]
         )
+# bloquea y pide aclaración
+#         if not semantic["valid"]:
+#             tracer.set_decision("ACLARACION")
+#             trace_data = tracer.finalize()
+#             return {
+#                 "type": "necesita_aclaracion",
+#                 "reason": semantic["reason"],
+#                 "clarification_question": "¿Podés reformular la pregunta con más detalle?",
+#                 "natural_query": natural_language_query,
+#                 "trace_steps": trace_data
+#             }
 
+        # advierte pero ejecuta igual, no hay peligro
         if not semantic["valid"]:
-            tracer.set_decision("ACLARACION")
-            trace_data = tracer.finalize()
-            return {
-                "type": "necesita_aclaracion",
-                "reason": semantic["reason"],
-                "clarification_question": "¿Podés reformular la pregunta con más detalle?",
-                "natural_query": natural_language_query,
-                "trace_steps": trace_data
-            }
+            tracer.step(
+                archivo="nl2sql_generator",
+                paso="semantic_warning",
+                entrada=semantic["reason"],
+                accion="Validación semántica falló pero SQL estructuralmente válida — ejecutando con advertencia",
+                salida="continuando pipeline"
+            )
+
 
         # ── PASO 7: Confidence ────────────────────────────────────────────
         confidence, confidence_label = self._calculate_confidence(

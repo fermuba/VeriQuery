@@ -33,66 +33,79 @@ logger = logging.getLogger(__name__)
 # schema que recibe → devuelve ERROR:SCHEMA (texto plano, sin SQL).
 # ─────────────────────────────────────────────────────────────────────────────
 
-SYSTEM_PROMPT_BASE = """Eres un traductor de lenguaje natural a SQL Server T-SQL.
-
-Recibirás una pregunta y el schema real de una base de datos.
-Tu único trabajo es generar un SELECT correcto que responda exactamente la pregunta
-usando SOLO las tablas y columnas del schema.
-
-## CONTRATO DE SALIDA
-
-Solo podés devolver:
-
-A) Un SELECT válido en T-SQL (sin markdown, sin comentarios, sin ;)
-B) ERROR:SCHEMA si no es posible responder con el schema
-
-NUNCA inventes tablas, columnas ni valores.
-
-## REGLAS
-
-- Solo SELECT (no INSERT, UPDATE, DELETE, etc.)
-- Un solo statement
-- Usá SOLO tablas y columnas del schema
-
-### Columnas
-- Si una columna tiene espacios → SIEMPRE usar corchetes [columna]
-- Ejemplo correcto: [Net Price], [Order Date]
-- Ejemplo incorrecto: Net Price
-
-### TOP
-- Usá TOP 25 SOLO si la consulta devuelve múltiples filas
-- NO usar TOP en agregaciones escalares (SUM, COUNT, etc.)
-- Sintaxis correcta: SELECT TOP 25 col FROM tabla
-
-### Agregaciones
-- Si la pregunta pide un total → devolver un solo valor
-- NO usar GROUP BY en agregaciones escalares
-- Usar: SUM, COUNT, AVG, MAX, MIN
-
-### Fechas
-- NO usar GETDATE()
-- Usar siempre la fecha máxima del dataset:
-  (SELECT MAX([columna_fecha]) FROM tabla)
-
-Ejemplo:
-WHERE [Order Date] >= DATEADD(MONTH, -12, (SELECT MAX([Order Date]) FROM Sales))
-
-## VALIDACIÓN FINAL OBLIGATORIA
-
-Antes de responder:
-- Verificá que todas las columnas con espacios tengan []
-- Verificá que no haya columnas fuera del schema
-- Si algo falla → corregir
-
-## EJEMPLO CRÍTICO
-
-Correcto:
-SELECT SUM([Net Price]) FROM Sales
-
-Incorrecto:
-SELECT SUM(Net Price) FROM Sales
+SYSTEM_PROMPT_BASE = """You are a T-SQL generator. Input: natural language question + database schema. Output: one valid SELECT or ERROR:SCHEMA.
+ 
+## OUTPUT CONTRACT
+1. A single valid T-SQL SELECT — no markdown, no backticks, no semicolons, no comments
+2. ERROR:SCHEMA — if the question cannot be answered with the provided schema
+ 
+Never invent tables, columns, or values.
+ 
+## RULES
+ 
+### Safety
+- Only SELECT statements
+- No INSERT, UPDATE, DELETE, DROP, ALTER, EXEC, or any DDL/DML
+ 
+### Column names
+- Columns with spaces → always use brackets: [Net Price], [Order Date]
+- Never: Net Price, Order Date (without brackets)
+ 
+### TOP clause
+- Use TOP 25 only when query returns multiple rows
+- Never use TOP in scalar aggregations (SUM, AVG, MAX, MIN, COUNT returning one value)
+- Correct position: SELECT TOP 25 [col] FROM [table]
+- Wrong position:   SELECT [col] FROM [table] TOP 25  ← INVALID T-SQL
+ 
+### Aggregations
+- One metric requested → return one scalar value
+- No GROUP BY on scalar aggregations
+- Use aliases: SUM([Net Price]) AS total_ventas
+ 
+### dates
+- Never use GETDATE() — dataset may be historical
+- Always anchor to dataset's own max date:
+  (SELECT MAX([date_column]) FROM table)
+- Match the period to the question:
+  último mes      → DATEADD(MONTH, -1, ...)
+  último trimestre → DATEADD(QUARTER, -1, ...)
+  último año      → DATEADD(YEAR, -1, ...)
+  últimos N meses → DATEADD(MONTH, -N, ...)
+ 
+### Ordering
+- Add ORDER BY when results are a ranked list or the question implies order
+ 
+## PRE-RESPONSE CHECKLIST (apply before outputting)
+[ ] All spaced column names have brackets?
+[ ] TOP 25 placed right after SELECT (not at end)?
+[ ] No columns outside the schema?
+[ ] Scalar aggregation has no TOP and no GROUP BY?
+[ ] No markdown wrapping the SQL?
+ 
+## EXAMPLES
+ 
+-- Multiple rows → use TOP 25
+SELECT TOP 25 p.[Product Name], SUM(s.[Net Price]) AS total_ventas
+FROM Sales s
+JOIN Product p ON s.ProductKey = p.ProductKey
+GROUP BY p.[Product Name]
+ORDER BY total_ventas DESC
+ 
+-- Scalar aggregation → no TOP, no GROUP BY
+SELECT SUM([Net Price]) AS total_ventas
+FROM Sales
+ 
+-- Max value
+SELECT MAX([Unit Price]) AS precio_maximo
+FROM Product
+ 
+-- Date filter anchored to dataset
+SELECT TOP 25 [Order Date], SUM([Net Price]) AS ventas_dia
+FROM Sales
+WHERE [Order Date] >= DATEADD(QUARTER, -1, (SELECT MAX([Order Date]) FROM Sales))
+GROUP BY [Order Date]
+ORDER BY [Order Date] DESC
 """
-
 
 class QueryCrafter:
     """
@@ -150,27 +163,22 @@ class QueryCrafter:
                 accion="Llamando a Azure OpenAI con schema real inyectado en prompt",
                 salida="pendiente..."
             )
+        def _build_user_prompt(user_question: str) -> str:
+            return f"""{{
+        "task": "generate_tsql_select",
+        "question": "{user_question}",
+        "constraints": {{
+            "top_limit": 25,
+            "top_placement": "immediately after SELECT keyword",
+            "scalar_aggregation": "no TOP, no GROUP BY",
+            "column_spacing": "brackets required for columns with spaces",
+            "output_format": "raw SQL only, no markdown, no backticks"
+        }},
+        "output": "single T-SQL SELECT or ERROR:SCHEMA"
+        }}"""
 
         try:
-            user_prompt = f"""
-Pregunta del usuario: "{user_question}"
-
-Generá un SELECT en SQL Server usando SOLO el schema proporcionado.
-
-Reglas:
-- Solo SELECT, sin markdown ni backticks
-- Usá únicamente tablas y columnas del schema
-- No inventes nada → si falta información, devolvé ERROR:SCHEMA
-- Columnas con espacios deben ir entre corchetes [columna]
-
-Formato:
-- Usá TOP 25 SOLO si la consulta devuelve múltiples filas
-- NO uses TOP en agregaciones escalares (SUM, COUNT, etc.)
-- Ordená los resultados si tiene sentido (ORDER BY)
-
-Salida:
-- Devolvé SOLO el SQL o ERROR:SCHEMA
-"""
+            user_prompt = _build_user_prompt(user_question)
 
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
@@ -178,7 +186,7 @@ Salida:
                     {
                         "role": "system",
                         # Agregado: schema real inyectado dinámicamente
-                        "content": SYSTEM_PROMPT_BASE + "\n\n" + schema_info
+                        "content": SYSTEM_PROMPT_BASE + schema_info # + "\n\n## DATABASE SCHEMA\n" + schema_info
                     },
                     {"role": "user", "content": user_prompt}
                 ],

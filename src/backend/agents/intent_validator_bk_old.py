@@ -25,66 +25,182 @@ DECISION_GENERAR_SQL = "GENERAR_SQL"
 DECISION_ACLARACION = "NECESITA_ACLARACION"
 DECISION_NO_SOPORTADO = "NO_SOPORTADO"
 
+INTENT_SYSTEM_PROMPT = """Sos un analista de datos experto trabajando en un sistema NL2SQL.
 
-INTENT_SYSTEM_PROMPT = """You are a NL2SQL intent classifier. Your only job is to decide if a natural language question can be answered using the provided database schema.
- 
-## ROLE
-Expert data analyst. You think like a business user, not a database engineer.
- 
-## TASK
-Classify the user question into exactly ONE of:
-- GENERAR_SQL
+Tu tarea es clasificar la intención del usuario en UNA de estas tres opciones:
+
+1. GENERAR_SQL
+2. NECESITA_ACLARACION
+3. NO_SOPORTADO
+
+---
+
+## CONTEXTO DISPONIBLE
+
+- Pregunta actual del usuario
+- Schema de la base de datos (tablas y columnas)
+- Historial reciente de la conversación (si existe)
+
+---
+
+## OBJETIVO
+
+Tomar una decisión práctica y razonable sobre si la pregunta puede resolverse con el schema.
+
+NO busques perfección absoluta.
+Buscá una interpretación razonable como lo haría un analista humano.
+
+---
+
+## REGLAS CRÍTICAS
+
+### 1. INFERENCIA SEMÁNTICA (OBLIGATORIA)
+
+NO hagas matching literal estricto.
+
+El usuario puede usar lenguaje de negocio distinto al técnico.
+
+Ejemplos de equivalencias:
+- "ventas" → sales, FactSales, Orders
+- "clientes" → customers, Client
+- "productos" → products, Product
+- "ingresos" → sales, revenue
+- "órdenes" → orders
+
+Si existe una correspondencia razonable → ES VÁLIDO.
+
+---
+
+### 2. REGLA DE ORO (MUY IMPORTANTE)
+
+Si un analista humano podría responder la pregunta con el schema disponible,
+entonces la decisión debe ser GENERAR_SQL.
+
+---
+
+### 3. EVITAR SOBRE-RECHAZO
+
+NO uses NO_SOPORTADO si existe alguna interpretación razonable.
+
+En caso de duda entre:
 - NECESITA_ACLARACION
 - NO_SOPORTADO
- 
-## DECISION RULES
- 
-### GENERAR_SQL — use when:
-- Intent is clear enough for a reasonable analyst to write SQL
-- Business terms can map to schema (ventas→Sales, clientes→Customer, productos→Product)
-- Minor details are missing but a default interpretation exists
- 
-### NECESITA_ACLARACION — use when:
-- Two or more EQUALLY valid interpretations exist with no way to choose
-- Always prefer this over NO_SOPORTADO when uncertain
- 
-### NO_SOPORTADO — use when:
-- Zero logical relationship between question and schema exists
-- No reasonable mapping is possible
- 
-## SEMANTIC MAPPING (apply always)
-ventas / ingresos / facturación → Sales
-clientes / compradores          → Customer
-productos / artículos / items   → Product
-tiendas / locales / sucursales  → Store
-fechas / períodos / tiempo      → Date
- 
-## CONSTRAINTS
-- ONE clarification question maximum
-- TWO to FOUR concrete options when asking for clarification
-- NEVER invent tables or columns
-- NEVER reject due to literal mismatch
-- NEVER output text outside the JSON
- 
-## RESPONSE FORMAT (strict)
+
+Elegir siempre NECESITA_ACLARACION.
+
+---
+
+### 4. CUÁNDO USAR GENERAR_SQL
+
+Usar GENERAR_SQL cuando:
+
+- La intención es suficientemente clara
+- O se puede inferir razonablemente
+- Aunque falten detalles menores
+
+Ejemplos válidos:
+- "ventas del último trimestre"
+- "ventas por mes"
+- "clientes por región"
+
+---
+
+### 5. CUÁNDO USAR NECESITA_ACLARACION
+
+Solo cuando hay múltiples interpretaciones IGUALMENTE válidas.
+
+Ejemplos:
+- "ventas" (¿totales? ¿por mes? ¿por producto?)
+- "mejor producto" (¿más vendido? ¿más rentable?)
+
+IMPORTANTE:
+- Hacer SOLO UNA pregunta
+- Proveer SIEMPRE entre 2 y 4 opciones concretas
+- Las opciones deben ayudar a cerrar la intención
+
+---
+
+### 6. CUÁNDO USAR NO_SOPORTADO
+
+Solo si NO existe ninguna relación lógica con el schema.
+
+Ejemplos:
+- "temperatura de empleados" en una BD de ventas
+- "estado de células del laboratorio" en clientes
+
+---
+
+### 7. USO DEL HISTORIAL
+
+Si el historial completa la intención, usarlo.
+
+Ejemplo:
+Usuario: "ventas"
+Usuario: "por mes"
+
+→ Interpretar como: ventas por mes → GENERAR_SQL
+
+---
+
+### 8. PROHIBICIONES
+
+- NO inventar tablas o columnas
+- NO rechazar por falta de coincidencia literal
+- NO hacer más de UNA pregunta
+- NO devolver texto fuera del JSON
+
+---
+
+## FORMATO DE RESPUESTA (OBLIGATORIO)
+
+Responder SOLO con JSON válido:
+
 {
   "decision": "GENERAR_SQL" | "NECESITA_ACLARACION" | "NO_SOPORTADO",
-  "reason": "<brief explanation in Spanish, max 20 words>",
-  "clarification_question": "<single question in Spanish>" | null,
-  "clarification_options": ["<option1>", "<option2>"] | null
+  "reason": "explicación breve en español",
+  "clarification_question": "pregunta o null",
+  "clarification_options": ["opción 1", "opción 2"] o null
 }
- 
-## EXAMPLES
- 
-Input: "ventas del último trimestre"
-Output: {"decision": "GENERAR_SQL", "reason": "Intención clara, ventas mapea a Sales, período inferible", "clarification_question": null, "clarification_options": null}
- 
-Input: "ventas"
-Output: {"decision": "NECESITA_ACLARACION", "reason": "Ambigüedad real: múltiples agrupaciones igualmente válidas", "clarification_question": "¿Cómo querés analizar las ventas?", "clarification_options": ["Ventas totales", "Ventas por mes", "Ventas por producto", "Ventas por región"]}
- 
-Input: "temperatura corporal de empleados"
-Output: {"decision": "NO_SOPORTADO", "reason": "Sin relación con el schema disponible", "clarification_question": null, "clarification_options": null}"""
- 
+
+---
+
+## EJEMPLOS
+
+### Caso 1 — Inferencia válida
+Usuario: "ventas del último trimestre"
+
+{
+  "decision": "GENERAR_SQL",
+  "reason": "La intención es clara y 'ventas' se puede mapear a tablas de ventas del schema",
+  "clarification_question": null,
+  "clarification_options": null
+}
+
+---
+
+### Caso 2 — Ambigüedad real
+Usuario: "ventas"
+
+{
+  "decision": "NECESITA_ACLARACION",
+  "reason": "No se especifica cómo analizar las ventas",
+  "clarification_question": "¿Cómo querés analizar las ventas?",
+  "clarification_options": ["Ventas totales", "Ventas por mes", "Ventas por región"]
+}
+
+---
+
+### Caso 3 — No soportado real
+Usuario: "temperatura de empleados"
+
+{
+  "decision": "NO_SOPORTADO",
+  "reason": "El schema no contiene datos relacionados",
+  "clarification_question": null,
+  "clarification_options": null
+}
+
+"""
 
 class IntentValidator:
     """
@@ -115,11 +231,7 @@ class IntentValidator:
         else:
             logger.info("✅ IntentValidator activo")
 
-    # Sin tracer
-    # def validate(self, question: str, schema_info: str, history: Optional[list] = None) -> dict:
-
-    # Con tracer
-    def validate(self, question: str, schema_info: str, history: Optional[list] = None, tracer=None) -> dict:
+    def validate(self, question: str, schema_info: str, history: Optional[list] = None) -> dict:
         """
         Clasifica la intención de la pregunta en relación al schema.
 
@@ -146,46 +258,29 @@ class IntentValidator:
             }
 
         # Contexto del historial (últimos 3 mensajes) para no perder el hilo
-        def _build_user_content(question: str, schema_info: str, history: list = None) -> str:
-            """
-            Construye el mensaje de usuario para el clasificador de intención.
-            Separado en secciones claras para mejor parsing del LLM.
-            """
-        
-            # Historial: últimos 3 mensajes, solo si existe
-            history_section = ""
-            if history and len(history) > 0:
-                window = history[-3:]
-                lines = []
-                for msg in window:
-                    role = "user" if msg.get("role") == "user" else "assistant"
-                    lines.append(f'  {{"role": "{role}", "content": "{msg.get("content", "")}"}}')
-                history_section = f"""
-        "conversation_history": [
-        {chr(10).join(lines)}
-        ],"""
-        
-            user_content = f"""{{
-        "task": "classify_intent",{history_section}
-        "current_question": "{question}",
-        "database_schema": "{schema_info}"
-        }}"""
-        
-            return user_content
+        history_context = ""
+        if history and len(history) > 0:
+            # Tomamos solo los últimos 3 para eficiencia de tokens
+            window = history[-3:]
+            history_context = "### CONTEXTO CONVERSACIONAL (Últimos 3 mensajes):\n"
+            for msg in window:
+                role = "Usuario" if msg.get("role") == "user" else "Asistente"
+                history_context += f"- {role}: {msg.get('content')}\n"
+            history_context += "\n"
 
         try:
-            user_content = _build_user_content(question, schema_info, history)
+            user_content = f"""{history_context}Pregunta actual: "{question}"
 
-            # Tracer:
-            if tracer:
-                tracer.step(
-                    archivo="intent_validator",
-                    paso="schema_al_llm",
-                    entrada=question,
-                    accion="Schema enviado al LLM para clasificación de intención",
-                    salida=schema_info[:500]
-                )
+Schema activo:
+{schema_info[3000:]}"""  # Se envía completo, ya que ahora es compacto
+            # 🔍 DEBUG: ver qué schema recibe el modelo
+            print("\n===== SCHEMA ENVIADO AL LLM =====")
+            print(schema_info[:1000])  # solo preview para no saturar
+            print("===== FIN SCHEMA =====\n")
 
+            logger.info("📦 SCHEMA ENVIADO AL LLM (preview):")
+            logger.info(schema_info[:1000])
+            
             response = self.client.chat.completions.create(
                 model=self.deployment,
                 messages=[
@@ -211,15 +306,6 @@ class IntentValidator:
                 }
 
             logger.info(f"🧭 IntentValidator: {decision} — {result.get('reason', '')[:80]}")
-            # con tracer
-            if tracer:
-                tracer.step(
-                    archivo="intent_validator",
-                    paso="decision_final",
-                    entrada=question,
-                    accion=f"Decisión LLM: {decision}",
-                    salida=result.get("reason", "")
-                )
             return {
                 "decision": decision,
                 "reason": result.get("reason", ""),
@@ -230,8 +316,6 @@ class IntentValidator:
         except json.JSONDecodeError as e:
             logger.error(f"❌ IntentValidator: respuesta no es JSON válido: {e}")
             # En caso de fallo del clasificador, dejamos pasar (fail-open seguro)
-            if tracer:
-                tracer.error("intent_validator", "parsear_respuesta", str(e), entrada=question)
             return {
                 "decision": DECISION_GENERAR_SQL,
                 "reason": f"Error al parsear clasificación: {e}",
@@ -239,8 +323,6 @@ class IntentValidator:
             }
         except Exception as e:
             logger.error(f"❌ IntentValidator: error inesperado: {e}")
-            if tracer:
-                tracer.error("intent_validator", "llamada_llm", str(e), entrada=question)
             return {
                 "decision": DECISION_GENERAR_SQL,
                 "reason": f"Error en clasificación: {e}",
