@@ -1,21 +1,20 @@
 """
 VeriQuery — NL2SQL Generator (Orquestador)
 ==========================================
-Coordina el flujo completo NL → SQL → Respuesta.
+Coordin el flujo completo NL → SQL → Respuesta.
 
-# Agregado: schema_name dinámico por tipo de BD
-#   SQL Server → TABLE_SCHEMA = 'dbo'
-#   PostgreSQL/Supabase → TABLE_SCHEMA = 'public'
-#   Resuelve el problema de tablas no encontradas al cambiar de BD
-# Agregado: QueryTracer con finalize() — escribe logs/queries/
-# Agregado: schema_cache con db_name como clave
-# Agregado: set_active_database() para cambio de BD en runtime
-# Correccion: eliminado uso de core/schema.py y table_mapping
+# v2 — Mejoras arquitectónicas:
+# - Eliminado schema_cache: siempre recarga fresco al cambiar de BD
+# - Integrado IntentValidator (LLM): reemplaza al AmbiguityDetector por keywords
+# - Integrado SemanticValidator (LLM): verifica que el SQL responde la pregunta
+# - Detecta ERROR:SCHEMA devuelto por QueryCrafter cuando el schema no alcanza
+# - Registra schema_loaded_at en el tracer para trazabilidad
 """
 
 import os
 import sys
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -24,7 +23,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from dotenv import load_dotenv
 from openai import AzureOpenAI
 
-from src.backend.agents.ambiguity_detector import AmbiguityDetector
+from src.backend.agents.intent_validator import IntentValidator
+from src.backend.agents.semantic_validator import SemanticValidator
 from src.backend.agents.query_crafter import QueryCrafter
 from src.backend.database.factory import get_database_connector
 from src.backend.core.tracer import QueryTracer
@@ -57,13 +57,16 @@ class NL2SQLGenerator:
         )
         self.deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_GPT4O_MINI")
 
-        # Caché de schemas: {db_name: schema_text}
-        self._schema_cache: dict = {}
+        # Schema activo — sin caché. Cada cambio de BD recarga desde el conector.
+        self._active_schema: Optional[str] = None
         self._active_db_name: Optional[str] = None
         self._active_db_type: Optional[str] = None
         self._active_connector = None
+        self._schema_loaded_at: Optional[str] = None  # timestamp de carga del schema
 
-        self.ambiguity_detector = AmbiguityDetector()
+        # Agentes del pipeline
+        self.intent_validator = IntentValidator(azure_client=self.client)
+        self.semantic_validator = SemanticValidator(azure_client=self.client)
         self.query_crafter = QueryCrafter(azure_client=self.client)
 
         self._load_default_database()
@@ -84,10 +87,12 @@ class NL2SQLGenerator:
                 db_type=db_type
             )
 
-            self._schema_cache[db_name] = schema
+            # Sin caché: guardar solo el schema activo
+            self._active_schema = schema
             self._active_db_name = db_name
             self._active_db_type = db_type
             self._active_connector = connector
+            self._schema_loaded_at = datetime.now().isoformat()
 
             logger.info(
                 f"✅ BD por defecto: {db_name} ({db_type}) "
@@ -106,27 +111,27 @@ class NL2SQLGenerator:
         Cambia la BD activa en runtime sin reiniciar el servidor.
         Llamado desde POST /api/connect en main.py.
 
+        IMPORTANTE: sin caché — siempre recarga el schema fresco desde el conector.
+        Esto evita que información de una BD anterior contamine las queries.
+
         Args:
             db_name:   identificador de la BD (ej: "contoso", "supabase_ong")
             connector: instancia ya conectada
             db_type:   "sqlserver" | "postgresql" | "sqlite"
 
         Returns:
-            dict con success, db_name, schema_chars, cached
+            dict con success, db_name, schema_chars
         """
-        # Usar caché si ya fue cargado para esta BD
-        if db_name in self._schema_cache:
-            self._active_db_name = db_name
-            self._active_db_type = db_type
-            self._active_connector = connector
-            logger.info(f"✅ BD activa → '{db_name}' (desde caché)")
-            return {
-                "success": True,
-                "db_name": db_name,
-                "db_type": db_type,
-                "schema_chars": len(self._schema_cache[db_name]),
-                "cached": True
-            }
+        # Limpiar estado de la BD anterior antes de cargar la nueva
+        prev_db = self._active_db_name
+        self._active_schema = None
+        self._active_db_name = None
+        self._active_db_type = None
+        self._active_connector = None
+        self._schema_loaded_at = None
+
+        if prev_db:
+            logger.info(f"🧹 Schema anterior de '{prev_db}' limpiado")
 
         try:
             schema = self._load_schema_from_connector(
@@ -134,29 +139,33 @@ class NL2SQLGenerator:
                 db_name=db_name,
                 db_type=db_type
             )
-            self._schema_cache[db_name] = schema
+
+            # Guardar schema activo (sin caché entre BDs)
+            self._active_schema = schema
             self._active_db_name = db_name
             self._active_db_type = db_type
             self._active_connector = connector
+            self._schema_loaded_at = datetime.now().isoformat()
 
             logger.info(
                 f"✅ BD activa → '{db_name}' ({db_type}) "
-                f"— schema recargado {len(schema)} chars"
+                f"— schema recargado {len(schema)} chars "
+                f"— cargado a las {self._schema_loaded_at}"
             )
             return {
                 "success": True,
                 "db_name": db_name,
                 "db_type": db_type,
                 "schema_chars": len(schema),
-                "cached": False
+                "schema_loaded_at": self._schema_loaded_at
             }
         except Exception as e:
             logger.error(f"❌ Error cargando schema de '{db_name}': {e}")
             return {"success": False, "error": str(e)}
 
     def get_active_schema(self) -> str:
-        if self._active_db_name and self._active_db_name in self._schema_cache:
-            return self._schema_cache[self._active_db_name]
+        if self._active_schema:
+            return self._active_schema
         return "⚠️ Schema no disponible — conectá una BD primero"
 
     def generate_sql(
@@ -175,57 +184,19 @@ class NL2SQLGenerator:
 
         tracer = QueryTracer(question=natural_language_query)
 
-        # ── PASO 1: Ambigüedad ────────────────────────────────────────────
-        tracer.step(
-            archivo="ambiguity_detector",
-            paso="detectar",
-            entrada=natural_language_query,
-            accion="Buscando keywords ambiguos: mejor, peor, más, menos...",
-            salida="pendiente..."
-        )
-
-        ambiguity = self.ambiguity_detector.detect(natural_language_query)
-
-        if ambiguity["is_ambiguous"]:
-            tracer.step(
-                archivo="ambiguity_detector",
-                paso="resultado",
-                entrada=f"Keywords: {ambiguity['keywords_found']}",
-                accion="Ambigüedad detectada",
-                salida=f"{len(ambiguity['clarifications'])} opciones → front"
-            )
-            trace_data = tracer.finalize()
-            return {
-                "type": "clarification",
-                "keywords_found": ambiguity["keywords_found"],
-                "clarifications": ambiguity["clarifications"],
-                "confidence": ambiguity["confidence"],
-                "natural_query": natural_language_query,
-                "trace_steps": trace_data
-            }
-
-        tracer.step(
-            archivo="ambiguity_detector",
-            paso="resultado",
-            entrada=natural_language_query,
-            accion="Sin ambigüedad",
-            salida="CLEAR → query_crafter"
-        )
-
-        # ── PASO 2: Historial ─────────────────────────────────────────────
-        enriched_query = self._enrich_with_history(
-            natural_language_query, conversation_history, tracer
-        )
-
-        # ── PASO 3: Schema activo ─────────────────────────────────────────
+        # ── PASO 1: Schema activo ─────────────────────────────────────────
         schema_info = self.get_active_schema()
 
         tracer.step(
             archivo="nl2sql_generator",
             paso="schema",
-            entrada=f"BD activa: {self._active_db_name} ({self._active_db_type})",
-            accion="Obteniendo schema desde caché",
-            salida=f"{len(schema_info)} chars → inyectar en prompt"
+            entrada=f"BD: {self._active_db_name} ({self._active_db_type})",
+            accion="Obteniendo schema activo",
+            salida=(
+                f"{len(schema_info)} chars — cargado: {self._schema_loaded_at}"
+                if self._schema_loaded_at
+                else "⚠️ Sin schema"
+            )
         )
 
         if "⚠️" in schema_info:
@@ -233,12 +204,64 @@ class NL2SQLGenerator:
                 "nl2sql_generator", "schema",
                 "Schema no disponible — no hay BD activa"
             )
+            tracer.set_decision("RECHAZO")
             trace_data = tracer.finalize()
             return {
                 "type": "error",
                 "message": "No hay base de datos activa. Conectá una BD primero.",
                 "trace_steps": trace_data
             }
+
+        # ── PASO 2: Validar intención (reemplaza al AmbiguityDetector) ────
+        tracer.step(
+            archivo="intent_validator",
+            paso="clasificar",
+            entrada=natural_language_query,
+            accion="Clasificando intención vía LLM (GENERAR_SQL / NECESITA_ACLARACION / NO_SOPORTADO)",
+            salida="pendiente..."
+        )
+
+        intent = self.intent_validator.validate(
+            question=natural_language_query,
+            schema_info=schema_info,
+            history=conversation_history,
+            tracer=tracer
+        )
+
+        tracer.step(
+            archivo="intent_validator",
+            paso="resultado",
+            entrada=natural_language_query,
+            accion=f"Decisión: {intent['decision']}",
+            salida=intent.get("reason", "")[:120]
+        )
+
+        if intent["decision"] == "NECESITA_ACLARACION":
+            tracer.set_decision("ACLARACION")
+            trace_data = tracer.finalize()
+            return {
+                "type": "necesita_aclaracion",
+                "reason": intent["reason"],
+                "clarification_question": intent.get("clarification_question"),
+                "clarification_options": intent.get("clarification_options"),
+                "natural_query": natural_language_query,
+                "trace_steps": trace_data
+            }
+
+        if intent["decision"] == "NO_SOPORTADO":
+            tracer.set_decision("RECHAZO")
+            trace_data = tracer.finalize()
+            return {
+                "type": "no_soportado",
+                "reason": intent["reason"],
+                "natural_query": natural_language_query,
+                "trace_steps": trace_data
+            }
+
+        # ── PASO 3: Historial ─────────────────────────────────────────────
+        enriched_query = self._enrich_with_history(
+            natural_language_query, conversation_history, tracer
+        )
 
         # ── PASO 4: Generar SQL ───────────────────────────────────────────
         crafter_result = self.query_crafter.generate_sql(
@@ -253,6 +276,7 @@ class NL2SQLGenerator:
                 crafter_result.get("error", "Error desconocido"),
                 enriched_query
             )
+            tracer.set_decision("RECHAZO")
             trace_data = tracer.finalize()
             return {
                 "type": "error",
@@ -260,18 +284,81 @@ class NL2SQLGenerator:
                 "trace_steps": trace_data
             }
 
+        # ── PASO 4b: Detectar ERROR:SCHEMA devuelto por el LLM ───────────
+        sql_raw = crafter_result.get("sql", "")
+        if "ERROR:SCHEMA" in sql_raw:
+            tracer.step(
+                archivo="query_crafter",
+                paso="error_schema",
+                entrada=sql_raw[:80],
+                accion="El modelo indicó que el schema no soporta la pregunta",
+                salida="NO_SOPORTADO → sin ejecución"
+            )
+            tracer.set_decision("RECHAZO")
+            trace_data = tracer.finalize()
+            return {
+                "type": "no_soportado",
+                "reason": "La pregunta no puede responderse con el schema de la base de datos activa.",
+                "natural_query": natural_language_query,
+                "trace_steps": trace_data
+            }
+
         sql = crafter_result["sql"]
         tables_used = crafter_result.get("tables_used", [])
 
-        # ── PASO 5: Validar SQL ───────────────────────────────────────────
+        # ── PASO 5: Validación estructural SQL ────────────────────────────
         validation = self._validate_sql(sql, tracer)
 
-        # ── PASO 6: Confidence ────────────────────────────────────────────
+        # ── PASO 6: Validación semántica (SQL vs intención) ───────────────
+        tracer.step(
+            archivo="semantic_validator",
+            paso="validar",
+            entrada=f"Pregunta: '{natural_language_query[:60]}'",
+            accion="Verificando que el SQL responde la pregunta",
+            salida="pendiente..."
+        )
+
+        semantic = self.semantic_validator.validate(
+            question=natural_language_query,
+            sql=sql
+        )
+
+        tracer.step(
+            archivo="semantic_validator",
+            paso="resultado",
+            entrada=sql[:80] + "..." if len(sql) > 80 else sql,
+            accion=f"Válido semánticamente: {semantic['valid']}",
+            salida=semantic.get("reason", "")[:120]
+        )
+# bloquea y pide aclaración
+#         if not semantic["valid"]:
+#             tracer.set_decision("ACLARACION")
+#             trace_data = tracer.finalize()
+#             return {
+#                 "type": "necesita_aclaracion",
+#                 "reason": semantic["reason"],
+#                 "clarification_question": "¿Podés reformular la pregunta con más detalle?",
+#                 "natural_query": natural_language_query,
+#                 "trace_steps": trace_data
+#             }
+
+        # advierte pero ejecuta igual, no hay peligro
+        if not semantic["valid"]:
+            tracer.step(
+                archivo="nl2sql_generator",
+                paso="semantic_warning",
+                entrada=semantic["reason"],
+                accion="Validación semántica falló pero SQL estructuralmente válida — ejecutando con advertencia",
+                salida="continuando pipeline"
+            )
+
+
+        # ── PASO 7: Confidence ────────────────────────────────────────────
         confidence, confidence_label = self._calculate_confidence(
             sql, tables_used, validation
         )
 
-        # ── PASO 7: Reasoning + Explanation ──────────────────────────────
+        # ── PASO 8: Reasoning + Explanation ──────────────────────────────
         reasoning = self._build_reasoning(
             natural_language_query, enriched_query,
             sql, tables_used, validation, tracer
@@ -281,6 +368,7 @@ class NL2SQLGenerator:
         )
 
         # Finalizar tracer — escribe logs, devuelve dict si TRACE_RESPONSE=true
+        tracer.set_decision("SQL")
         trace_data = tracer.finalize()
 
         return {
@@ -298,6 +386,7 @@ class NL2SQLGenerator:
             "cost_usd": crafter_result.get("cost_usd", 0),
             "active_db": self._active_db_name,
             "active_db_type": self._active_db_type,
+            "schema_loaded_at": self._schema_loaded_at,
             "trace_steps": trace_data
         }
 
@@ -350,15 +439,10 @@ class NL2SQLGenerator:
             logger.info(f"  → {len(tables)} tablas encontradas")
 
             for table_name in tables:
-                schema_text += f"\nTABLA: {table_name}\n" + "-" * 40 + "\n"
-
                 # Columnas
                 cols_result = connector.execute_query(f"""
                     SELECT
-                        COLUMN_NAME,
-                        DATA_TYPE,
-                        CHARACTER_MAXIMUM_LENGTH,
-                        IS_NULLABLE
+                        COLUMN_NAME
                     FROM INFORMATION_SCHEMA.COLUMNS
                     WHERE TABLE_NAME = '{table_name}'
                       AND TABLE_SCHEMA = '{schema_name}'
@@ -366,42 +450,12 @@ class NL2SQLGenerator:
                 """)
 
                 if cols_result.success:
-                    for col in cols_result.data:
-                        col_name = col["COLUMN_NAME"]
-                        col_type = col["DATA_TYPE"]
-                        col_len = col.get("CHARACTER_MAXIMUM_LENGTH")
-                        type_str = (
-                            f"{col_type}({col_len})"
-                            if col_len and col_len > 0
-                            else col_type
-                        )
-                        nullable = "" if col.get("IS_NULLABLE") == "YES" else " [NOT NULL]"
-                        schema_text += f"  {col_name:30} {type_str}{nullable}\n"
+                    col_names = [col["COLUMN_NAME"] for col in cols_result.data]
+                    schema_text += f"{table_name}({', '.join(col_names)})\n"
+                else:
+                    schema_text += f"{table_name}()\n"
 
-                # Ejemplos de datos (ayudan al LLM a inferir contenido)
-                try:
-                    # Agregado: sintaxis compatible con SQL Server y PostgreSQL
-                    # SQL Server usa TOP, PostgreSQL usa LIMIT
-                    if db_type.lower() == "sqlserver":
-                        sample_sql = f"SELECT TOP 2 * FROM {table_name}"
-                    else:
-                        sample_sql = f"SELECT * FROM {table_name} LIMIT 2"
-
-                    sample = connector.execute_query(sample_sql)
-                    if sample.success and sample.data:
-                        schema_text += "Ejemplos:\n"
-                        for idx, row in enumerate(sample.data, 1):
-                            pairs = [
-                                f"{k}={str(v)[:25]}"
-                                for k, v in list(row.items())[:5]
-                            ]
-                            schema_text += f"  Fila {idx}: {', '.join(pairs)}\n"
-                except Exception:
-                    pass
-
-                schema_text += "\n"
-
-            return schema_text
+            return schema_text.strip()
 
         except Exception as e:
             logger.error(f"❌ Error cargando schema de {db_name}: {e}")

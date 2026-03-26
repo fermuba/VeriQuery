@@ -1,8 +1,0 @@
-2026-03-18 17:45:45 | ForensicGuardian.Security | ERROR | [HIGH] JAILBREAK | Pattern: Olvida tus reglas | Message: Jailbreak detectado
-2026-03-18 17:45:45 | ForensicGuardian.Security | ERROR | [HIGH] SQL_INJECTION | Pattern: DROP | Message: SQL Injection detectado
-2026-03-18 17:45:45 | ForensicGuardian.Security | WARNING | [MEDIUM] PII_EXPOSURE | Pattern: 23.456.789*** | Message: PII detectado en input
-2026-03-18 17:45:45 | ForensicGuardian.Security | WARNING | [MEDIUM] PROMPT_INJECTION | Pattern: instrucciones:  | Message: Prompt Injection detectado
-2026-03-18 17:45:45 | ForensicGuardian.Security | ERROR | [HIGH] SQL_INJECTION | Pattern: DELETE | Message: SQL Injection detectado
-2026-03-20 09:29:53 | ForensicGuardian.Security | ERROR | [CRITICAL] MALFORMED_SQL | Pattern: ; | Message: Detectadas múltiples sentencias SQL
-2026-03-20 09:30:26 | ForensicGuardian.Security | ERROR | [CRITICAL] UNAUTHORIZED_OPERATION | Pattern: SELECT expected | Message: SQL no comienza con SELECT
-2026-03-20 19:29:56 | ForensicGuardian.Security | ERROR | [CRITICAL] UNAUTHORIZED_OPERATION | Pattern: SELECT expected | Message: SQL no comienza con SELECT

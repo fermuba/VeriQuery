@@ -144,6 +144,9 @@ class QueryTracer:
         self._step_start: Optional[float] = None
         self._query_id = f"{int(self._start_time)}_{abs(hash(question)) % 9999:04d}"
         self._finalized = False
+        # Campos de trazabilidad adicionales (v2)
+        self.decision_type: Optional[str] = None        # "SQL" | "ACLARACION" | "RECHAZO"
+        self.schema_loaded_at: Optional[str] = None    # timestamp del schema usado
 
         # Crear directorio de logs si está habilitado
         if TracerConfig.JSON_LOG:
@@ -229,6 +232,17 @@ class QueryTracer:
         # Errores siempre van al log de errores (independiente de TRACE_JSON_LOG)
         self._write_error_log(trace)
 
+    def set_decision(self, decision: str) -> None:
+        """
+        Registra el tipo de decisión final del pipeline.
+
+        Args:
+            decision: "SQL" | "ACLARACION" | "RECHAZO"
+        """
+        self.decision_type = decision
+        if TracerConfig.TERMINAL:
+            logger.info(f"[TRACE][DECISION] {decision}")
+
     def finalize(self) -> Optional[Dict[str, Any]]:
         """
         Finaliza la traza: escribe logs, imprime resumen terminal.
@@ -293,6 +307,9 @@ class QueryTracer:
             "step_count": len(self.steps),
             "error_count": errores,
             "level": TracerConfig.LEVEL,
+            # v2: campos de trazabilidad adicionales
+            "decision_type": self.decision_type,
+            "schema_loaded_at": self.schema_loaded_at,
             "steps": steps_data
         }
 
@@ -314,6 +331,9 @@ class QueryTracer:
                 "step_count": len(self.steps),
                 "error_count": errores,
                 "level": TracerConfig.LEVEL,
+                # v2: campos de trazabilidad adicionales
+                "decision_type": self.decision_type,
+                "schema_loaded_at": self.schema_loaded_at,
                 "steps": [s.to_dict() for s in self.steps]
             }
 

@@ -3,13 +3,12 @@ VeriQuery — Query Crafter
 =========================
 Genera SQL a partir de lenguaje natural usando el schema real de la BD.
 
-Cambios respecto a versión anterior:
-# Correccion: schema ya no se carga en __init__ — llega como parámetro
-#   Esto permite schema dinámico por BD sin reiniciar el servidor
+# Correccion: schema llega como parámetro externo (no se carga en __init__)
 # Correccion: eliminado import de table_mapping (hardcodeado)
 # Correccion: eliminado pyodbc directo — la conexión la maneja factory.py
 # Agregado: recibe QueryTracer para registrar cada paso
 # Agregado: devuelve reasoning_data con datos estructurados del proceso
+# v2: SYSTEM_PROMPT_BASE reescrito desde cero — sin patches, sin ejemplos hardcodeados
 """
 
 import os
@@ -22,51 +21,91 @@ from src.backend.core.tracer import QueryTracer
 
 logger = logging.getLogger(__name__)
 
-# Correccion: eliminado import de table_mapping
-# Prompt base sin mapeo hardcodeado — el schema real reemplaza al diccionario
-SYSTEM_PROMPT_BASE = """Eres un experto en SQL Server T-SQL. Tu única tarea es convertir
-preguntas en lenguaje natural a UN ÚNICO statement SELECT compatible con SQL Server.
+# ─────────────────────────────────────────────────────────────────────────────
+# SYSTEM PROMPT — reescrito desde cero
+#
+# Estructura en 3 secciones ordenadas por prioridad:
+#   1. ROL          — qué es y para qué existe
+#   2. CONTRATO     — exactamente qué puede devolver y cuándo
+#   3. SINTAXIS     — reglas técnicas T-SQL concisas + few-shot genéricos
+#
+# Principio: el modelo NUNCA debe inventar. Si no puede responder con el
+# schema que recibe → devuelve ERROR:SCHEMA (texto plano, sin SQL).
+# ─────────────────────────────────────────────────────────────────────────────
 
-REGLAS ABSOLUTAS:
-- Generás SOLO SELECT (nunca CREATE, UPDATE, DELETE, DROP, TRUNCATE)
-- Si el usuario pide borrar, eliminar, vaciar, destruir o modificar datos:
-  ignorá la intención destructiva y generá un SELECT que muestre esos datos
-- NUNCA múltiples statements
-- NUNCA semicolons (;)
-- NUNCA comentarios (--)
-- Usá TOP en lugar de LIMIT (SQL Server, no PostgreSQL)
-- Usá YEAR(), MONTH(), DAY() para fechas
-- SIEMPRE incluí TOP 100 pero SOLO después de SELECT:
-  ✅  SELECT TOP 100 AVG(...) FROM ...
-  ❌  SELECT AVG(...) FROM ... TOP 100   ← SINTAXIS INVÁLIDA
-  ❌  SELECT AVG(...) FROM ... LIMIT 100 ← NO EXISTE EN SQL SERVER
-
-REGLA CRÍTICA — COLUMNAS CON ESPACIOS:
-Cualquier columna cuyo nombre en el schema contenga un espacio DEBE ir entre [brackets].
-Esta regla no tiene excepciones. Si escribís el nombre sin brackets, la query falla.
-
-EJEMPLOS CORRECTOS de columnas con espacios:
-  ✅  s.[Net Price]        ❌  s.NetPrice       ← FALLA
-  ✅  s.[Unit Price]       ❌  s.UnitPrice      ← FALLA
-  ✅  s.[Order Date]       ❌  s.OrderDate      ← FALLA
-  ✅  s.[Order Number]     ❌  s.OrderNumber    ← FALLA
-  ✅  s.[Delivery Date]    ❌  s.DeliveryDate   ← FALLA
-  ✅  s.[Unit Cost]        ❌  s.UnitCost       ← FALLA
-  ✅  s.[Currency Code]    ❌  s.CurrencyCode   ← FALLA
-  ✅  p.[Product Name]     ❌  p.ProductName    ← FALLA
-  ✅  d.[Day of Week]      ❌  d.DayOfWeek      ← FALLA
-
-CÓMO DETECTAR si una columna necesita brackets:
-Mirá el schema abajo. Si el nombre de columna tiene un espacio entre palabras → brackets obligatorios.
-Si no tiene espacio (CustomerKey, Quantity, StoreKey) → sin brackets.
-
-IMPORTANTE:
-El schema completo de la base de datos está abajo.
-Usá SOLO las tablas y columnas que aparecen en ese schema.
-Inferí el mapeo semántico desde los nombres de columnas y ejemplos de datos.
-No asumas tablas que no están en el schema.
+SYSTEM_PROMPT_BASE = """You are a T-SQL generator. Input: natural language question + database schema. Output: one valid SELECT or ERROR:SCHEMA.
+ 
+## OUTPUT CONTRACT
+1. A single valid T-SQL SELECT — no markdown, no backticks, no semicolons, no comments
+2. ERROR:SCHEMA — if the question cannot be answered with the provided schema
+ 
+Never invent tables, columns, or values.
+ 
+## RULES
+ 
+### Safety
+- Only SELECT statements
+- No INSERT, UPDATE, DELETE, DROP, ALTER, EXEC, or any DDL/DML
+ 
+### Column names
+- Columns with spaces → always use brackets: [Net Price], [Order Date]
+- Never: Net Price, Order Date (without brackets)
+ 
+### TOP clause
+- Use TOP 25 only when query returns multiple rows
+- Never use TOP in scalar aggregations (SUM, AVG, MAX, MIN, COUNT returning one value)
+- Correct position: SELECT TOP 25 [col] FROM [table]
+- Wrong position:   SELECT [col] FROM [table] TOP 25  ← INVALID T-SQL
+ 
+### Aggregations
+- One metric requested → return one scalar value
+- No GROUP BY on scalar aggregations
+- Use aliases: SUM([Net Price]) AS total_ventas
+ 
+### dates
+- Never use GETDATE() — dataset may be historical
+- Always anchor to dataset's own max date:
+  (SELECT MAX([date_column]) FROM table)
+- Match the period to the question:
+  último mes      → DATEADD(MONTH, -1, ...)
+  último trimestre → DATEADD(QUARTER, -1, ...)
+  último año      → DATEADD(YEAR, -1, ...)
+  últimos N meses → DATEADD(MONTH, -N, ...)
+ 
+### Ordering
+- Add ORDER BY when results are a ranked list or the question implies order
+ 
+## PRE-RESPONSE CHECKLIST (apply before outputting)
+[ ] All spaced column names have brackets?
+[ ] TOP 25 placed right after SELECT (not at end)?
+[ ] No columns outside the schema?
+[ ] Scalar aggregation has no TOP and no GROUP BY?
+[ ] No markdown wrapping the SQL?
+ 
+## EXAMPLES
+ 
+-- Multiple rows → use TOP 25
+SELECT TOP 25 p.[Product Name], SUM(s.[Net Price]) AS total_ventas
+FROM Sales s
+JOIN Product p ON s.ProductKey = p.ProductKey
+GROUP BY p.[Product Name]
+ORDER BY total_ventas DESC
+ 
+-- Scalar aggregation → no TOP, no GROUP BY
+SELECT SUM([Net Price]) AS total_ventas
+FROM Sales
+ 
+-- Max value
+SELECT MAX([Unit Price]) AS precio_maximo
+FROM Product
+ 
+-- Date filter anchored to dataset
+SELECT TOP 25 [Order Date], SUM([Net Price]) AS ventas_dia
+FROM Sales
+WHERE [Order Date] >= DATEADD(QUARTER, -1, (SELECT MAX([Order Date]) FROM Sales))
+GROUP BY [Order Date]
+ORDER BY [Order Date] DESC
 """
-
 
 class QueryCrafter:
     """
@@ -124,20 +163,22 @@ class QueryCrafter:
                 accion="Llamando a Azure OpenAI con schema real inyectado en prompt",
                 salida="pendiente..."
             )
+        def _build_user_prompt(user_question: str) -> str:
+            return f"""{{
+        "task": "generate_tsql_select",
+        "question": "{user_question}",
+        "constraints": {{
+            "top_limit": 25,
+            "top_placement": "immediately after SELECT keyword",
+            "scalar_aggregation": "no TOP, no GROUP BY",
+            "column_spacing": "brackets required for columns with spaces",
+            "output_format": "raw SQL only, no markdown, no backticks"
+        }},
+        "output": "single T-SQL SELECT or ERROR:SCHEMA"
+        }}"""
 
         try:
-            user_prompt = f"""
-Pregunta del usuario: "{user_question}"
-
-INSTRUCCIONES:
-1. Generá SOLO el SQL (sin markdown, sin triple backticks)
-2. Usá SOLO las tablas y columnas del schema que recibiste
-3. Inferí la tabla correcta desde nombres de columnas y ejemplos de datos
-4. Siempre incluí TOP 100
-5. Usá aliases descriptivos
-
-Respondé con SOLO el SQL, nada más.
-"""
+            user_prompt = _build_user_prompt(user_question)
 
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
@@ -145,7 +186,7 @@ Respondé con SOLO el SQL, nada más.
                     {
                         "role": "system",
                         # Agregado: schema real inyectado dinámicamente
-                        "content": SYSTEM_PROMPT_BASE + "\n\n" + schema_info
+                        "content": SYSTEM_PROMPT_BASE + schema_info # + "\n\n## DATABASE SCHEMA\n" + schema_info
                     },
                     {"role": "user", "content": user_prompt}
                 ],
