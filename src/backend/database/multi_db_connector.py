@@ -237,6 +237,9 @@ class MultiDatabaseConnector:
                 return {}, "No active database set"
             config = self.active_database
 
+        # DEBUG: Log the config details
+        logger.debug(f"Scanning schema for {config.name}: user={config.username}, pwd_present={bool(config.password)}, db={config.database}")
+
         scanner = SchemaScanner(config)
         schema, error = scanner.scan_schema()
         
