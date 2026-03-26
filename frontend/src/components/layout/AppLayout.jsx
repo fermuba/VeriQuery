@@ -19,8 +19,8 @@ function Sidebar() {
     <aside className="w-[4.5rem] hover:w-60 transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] border-r border-border glass-surface flex flex-col py-5 group shrink-0 overflow-hidden z-10">
       {/* Logo */}
       <div className="px-2 mb-6">
-        <div className="w-11 h-11 rounded-lg bg-primary/10 flex items-center justify-center">
-          <Shield className="w-6 h-6 text-primary" strokeWidth={1.5} />
+        <div className="w-11 h-11 rounded-lg bg-slate-800/10 flex items-center justify-center">
+          <Shield className="w-6 h-6 text-slate-800" strokeWidth={1.5} />
         </div>
       </div>
 
@@ -32,12 +32,12 @@ function Sidebar() {
             onClick={() => setActiveIndex(i)}
             className={`flex items-center gap-3 px-3 py-3 rounded-md transition-all duration-200 text-left whitespace-nowrap flex-shrink-0 ${
               i === activeIndex
-                ? 'bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))]'
-                : 'text-[hsl(var(--sidebar-foreground))] hover:bg-muted hover:translate-x-0.5'
+                ? 'bg-slate-800/10 text-slate-800'
+                : 'text-slate-600 hover:bg-muted hover:translate-x-0.5'
             }`}
           >
-            <Icon className="w-5 h-5 flex-shrink-0" strokeWidth={1.5} />
-            <span className="text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <Icon className="w-5 h-5 flex-shrink-0 text-slate-800" strokeWidth={1.5} />
+            <span className="text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-slate-800">
               {label}
             </span>
           </button>

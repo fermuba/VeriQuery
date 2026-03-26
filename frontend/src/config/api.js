@@ -1,7 +1,7 @@
 /**
  * API Configuration
  * 
- * Conecta el frontend al backend FastAPI
+ * Conecta el frontend al backend FastAPI con autenticación
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -16,7 +16,17 @@ export const apiConfig = {
 };
 
 /**
- * Fetch wrapper con mejor manejo de errores
+ * Obtener el token de autenticación de MSAL
+ * Esta función será inyectada por el contexto de autenticación
+ */
+let getAccessTokenFn = null;
+
+export const setGetAccessTokenFunction = (fn) => {
+  getAccessTokenFn = fn;
+};
+
+/**
+ * Fetch wrapper con autenticación y mejor manejo de errores
  */
 export const apiFetch = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
@@ -24,13 +34,27 @@ export const apiFetch = async (endpoint, options = {}) => {
   console.log(`📡 API Call: ${options.method || 'GET'} ${url}`);
   
   try {
+    // Obtener token si está disponible
+    let headers = {
+      ...apiConfig.headers,
+      ...options.headers,
+    };
+
+    if (getAccessTokenFn) {
+      try {
+        const token = await getAccessTokenFn();
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+      } catch (err) {
+        console.warn('⚠️ Could not get access token:', err.message);
+      }
+    }
+
     const response = await fetch(url, {
       ...apiConfig,
       ...options,
-      headers: {
-        ...apiConfig.headers,
-        ...options.headers,
-      }
+      headers,
     });
 
     if (!response.ok) {

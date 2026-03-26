@@ -1,4 +1,7 @@
 import { useEffect } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { AuthGuard, Login } from './auth'
+import AuthInitializer from './components/auth/AuthInitializer'
 import AppLayout from './components/layout/AppLayout'
 import ChatContainer from './components/chat/ChatContainer'
 import DataPreviewPanel from './components/data/DataPreviewPanel'
@@ -7,7 +10,7 @@ import WelcomeScreen from './components/layout/WelcomeScreen'
 import { useAppStore } from './store/useAppStore'
 import { useBackendConnection } from './hooks/useBackend'
 
-export default function App() {
+function MainApp() {
   const { selectedDatabase } = useAppStore()
   const { isConnected, loading, error, backendStatus } = useBackendConnection()
 
@@ -36,5 +39,35 @@ export default function App() {
       </AppLayout>
       <SecurityBadge />
     </>
+  )
+}
+
+export default function App() {
+  return (
+    <AuthInitializer>
+      <Routes>
+        {/* Public route - Login */}
+        <Route path="/login" element={<Login />} />
+
+        {/* Callback route - Microsoft Entra ID redirect after login */}
+        <Route path="/callback" element={<Login />} />
+
+        {/* Protected route - Main app */}
+        <Route
+          path="/dashboard"
+          element={
+            <AuthGuard>
+              <MainApp />
+            </AuthGuard>
+          }
+        />
+
+        {/* Redirect root to dashboard */}
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        
+        {/* Catch all - redirect to dashboard */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </AuthInitializer>
   )
 }

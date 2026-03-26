@@ -119,12 +119,16 @@ async def lifespan(app: FastAPI):
         app_state.db_connector = get_database_connector()
         logger.info(f"✅ Database connector created: {app_state.db_connector}")
         
-        if app_state.db_connector.connect():
-            app_state.db_healthy = True
-            is_healthy, message = app_state.db_connector.health_check()
-            logger.info(f"✅ Database health check: {message}")
-        else:
-            logger.warning("⚠️  Database connector created but connection failed")
+        try:
+            if app_state.db_connector.connect():
+                app_state.db_healthy = True
+                is_healthy, message = app_state.db_connector.health_check()
+                logger.info(f"✅ Database health check: {message}")
+            else:
+                logger.warning("⚠️  Database connector created but connection failed")
+                app_state.db_healthy = False
+        except Exception as db_error:
+            logger.warning(f"⚠️  Database connection failed (non-fatal): {db_error}")
             app_state.db_healthy = False
         
         # 5. Log startup summary
@@ -999,62 +1003,6 @@ def _format_natural_language_answer(question: str, data: List[Dict[str, Any]]) -
     return f"Found {len(data)} results matching your query."
 
 
-# ============================================================================
-# ENDPOINTS
-# ============================================================================
-
-@app.get("/", tags=["Info"])
-async def root():
-    """Información de la API"""
-    return {
-        "name": "VeriQuery",
-        "version": "1.0.0",
-        "endpoints": {
-            "POST /api/query": "Procesar consulta en lenguaje natural",
-            "GET /api/health": "Estado de salud",
-            "GET /api/docs": "Documentación interactiva (Swagger)",
-        }
-    }
-
-@app.get("/api/health", response_model=HealthResponse, tags=["Health"])
-async def health_check():
-    """Verificar estado de todos los servicios"""
-    
-    # Check Database
-    db_status = "❌ No disponible"
-    try:
-        # Aquí irías a conectar a SQL Server y hacer ping
-        db_status = "✅ Conectado"
-    except:
-        db_status = "❌ Error de conexión"
-    
-    # Check Azure OpenAI
-    openai_status = "❌ No disponible"
-    try:
-        if app_state.azure_config:
-            openai_status = "✅ Conectado"
-        else:
-            openai_status = "❌ No inicializado"
-    except:
-        openai_status = "❌ Error"
-    
-    return HealthResponse(
-        status="ok" if db_status.startswith("✅") and openai_status.startswith("✅") else "degraded",
-        timestamp=datetime.now().isoformat(),
-        database=db_status,
-        azure_openai=openai_status
-    )
-
-@app.get("/api/examples", tags=["Examples"])
-async def get_examples():
-    """Retorna ejemplos de consultas para mostrar en frontend"""
-    return {
-        "examples": [
-            "¿Cuántos beneficiarios tenemos en total?",
-            "¿Qué asistencias se entregaron en marzo?",
-            "¿Cuál es el producto más distribuido?",
-        ]
-    }
 
 
 

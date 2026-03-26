@@ -34,7 +34,6 @@ Thumbs.db
 
 # Logs del tracer
 logs/queries/
-logs/
 
 # Variables de entorno locales
 env_additions.txt

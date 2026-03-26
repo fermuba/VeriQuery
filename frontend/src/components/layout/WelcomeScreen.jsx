@@ -37,9 +37,9 @@ export default function WelcomeScreen() {
       <div className="w-full max-w-2xl">
         {/* Hero Section */}
         <div className="text-center mb-12">
-          <div className="mb-6 flex justify-center">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-              <Database className="w-8 h-8 text-primary" strokeWidth={1.5} />
+          <div className="mb-8 flex justify-center pt-4">
+            <div className="w-16 h-16 rounded-2xl bg-slate-800/10 flex items-center justify-center">
+              <Database className="w-8 h-8 text-slate-800" strokeWidth={1.5} />
             </div>
           </div>
           <h2 className="text-4xl font-bold text-foreground mb-2">Select a Database</h2>
