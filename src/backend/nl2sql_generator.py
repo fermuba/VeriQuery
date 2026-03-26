@@ -168,6 +168,47 @@ class NL2SQLGenerator:
             return self._active_schema
         return "⚠️ Schema no disponible — conectá una BD primero"
 
+    def set_active_schema_direct(self, db_name: str, db_type: str, schema_text: str) -> dict:
+        """
+        Establece el schema activo directamente sin cargar desde BD.
+        Útil cuando ya tenemos el schema desde el SchemaScanner.
+        
+        Args:
+            db_name: nombre de la BD
+            db_type: tipo de BD (postgresql, sqlserver, etc)
+            schema_text: texto del schema ya formateado
+        
+        Returns:
+            dict con success y detalles
+        """
+        try:
+            prev_db = self._active_db_name
+            
+            self._active_schema = schema_text
+            self._active_db_name = db_name
+            self._active_db_type = db_type
+            self._active_connector = None  # No necesitamos el connector si ya tenemos el schema
+            self._schema_loaded_at = datetime.now().isoformat()
+            
+            if prev_db and prev_db != db_name:
+                logger.info(f"🧹 Schema anterior de '{prev_db}' reemplazado")
+            
+            logger.info(
+                f"✅ BD activa → '{db_name}' ({db_type}) "
+                f"— schema establecido {len(schema_text)} chars "
+                f"— actualizado a las {self._schema_loaded_at}"
+            )
+            return {
+                "success": True,
+                "db_name": db_name,
+                "db_type": db_type,
+                "schema_chars": len(schema_text),
+                "schema_loaded_at": self._schema_loaded_at
+            }
+        except Exception as e:
+            logger.error(f"❌ Error estableciendo schema para '{db_name}': {e}")
+            return {"success": False, "error": str(e)}
+
     def generate_sql(
         self,
         natural_language_query: str,

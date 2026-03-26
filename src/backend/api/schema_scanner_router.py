@@ -26,6 +26,14 @@ logger = logging.getLogger(__name__)
 # Initialize connector
 db_connector = MultiDatabaseConnector()
 
+# Global reference to nl2sql_generator (será establecida desde main.py)
+nl2sql_generator = None
+
+def set_nl2sql_generator(generator):
+    """Called from main.py to set the nl2sql_generator instance"""
+    global nl2sql_generator
+    nl2sql_generator = generator
+
 router = APIRouter(prefix="/api/schema", tags=["schema"])
 
 
@@ -79,10 +87,30 @@ async def scan_schema(request: SchemaScanRequest, db_name: Optional[str] = None)
                 "sample_data": data["sample_data"]
             })
         
-        logger.info(f"✓ Schema scan successful for database: {request.database_name}")
+        # IMPORTANTE: Sincronizar con nl2sql_generator para que tenga el schema actualizado
+        if nl2sql_generator:
+            try:
+                config = db_connector.active_database
+                if config:
+                    # Convertir schema a formato texto (similar a _load_schema_from_connector)
+                    schema_text = f"=== SCHEMA: {database_name} ({config.db_type}) ===\n\n"
+                    for table_name, data in schema.items():
+                        cols = ", ".join(data["columns"])
+                        schema_text += f"{table_name}({cols})\n"
+                    
+                    nl2sql_generator.set_active_schema_direct(
+                        db_name=database_name,
+                        db_type=config.db_type,
+                        schema_text=schema_text
+                    )
+                    logger.info(f"✅ nl2sql_generator schema sincronizado para: {database_name}")
+            except Exception as e:
+                logger.warning(f"⚠ Error sincronizando nl2sql_generator: {e}")
+        
+        logger.info(f"✓ Schema scan successful for database: {database_name}")
         return SchemaResponse(
             tables=tables_list,
-            database_name=request.database_name,
+            database_name=database_name,
             error=None,
         )
     except Exception as e:

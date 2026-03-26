@@ -383,19 +383,9 @@ async def activate_database(database_name: str):
     if not success:
         raise HTTPException(status_code=404, detail=message)
     
-    # IMPORTANTE: Sincronizar con nl2sql_generator para que tenga el schema actualizado
-    if nl2sql_generator and success:
-        try:
-            config = db_connector.active_database
-            if config:
-                nl2sql_generator.set_active_database(
-                    db_name=database_name,
-                    connector=db_connector,
-                    db_type=config.db_type
-                )
-                logger.info(f"✅ nl2sql_generator schema sincronizado para: {database_name}")
-        except Exception as e:
-            logger.warning(f"⚠ Error sincronizando nl2sql_generator: {e}")
+    # Nota: El schema se sincronizará cuando se haga scan_schema desde el frontend
+    # No intentamos cargar el schema aquí para evitar incompatibilidades
+    logger.info(f"✅ BD activada: {database_name} (schema se sincronizará en el próximo scan)")
     
     return DatabaseActivateResponse(success=success, message=message)
 
