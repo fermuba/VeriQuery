@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CheckCircle, Database, ChevronDown, Eye, Settings, Sparkles, ArrowRight, Plus
 } from 'lucide-react';
-import { useSchemaScanner } from '../hooks/useSchemaScanner';
+im          <button className="w-full px-4 py-4 bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-800 hover:to-slate-900 text-white font-semibold flex items-center justify-center gap-2 transition-all">ort { useSchemaScanner } from '../hooks/useSchemaScanner';
 import { useAppStore } from '../store/useAppStore';
 
 export default function SchemaOverview() {
@@ -22,10 +22,10 @@ export default function SchemaOverview() {
         animate={{ opacity: 1 }}
         className="p-6 space-y-4"
       >
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
+        <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-lg p-6 border border-slate-200">
           <div className="flex items-center gap-3">
             <div className="animate-spin">
-              <Database className="text-blue-600" size={24} />
+              <Database className="text-slate-700" size={24} />
             </div>
             <div>
               <h3 className="font-semibold text-gray-900">Escaneando schema...</h3>
@@ -206,7 +206,7 @@ export default function SchemaOverview() {
           {suggestedQueries.length > 4 && (
             <button
               onClick={() => setShowMoreQueries(!showMoreQueries)}
-              className="w-full px-3 py-2 text-sm text-blue-600 font-medium hover:text-blue-700 flex items-center justify-center gap-1 mt-2"
+              className="w-full px-3 py-2 text-sm text-slate-700 font-medium hover:text-slate-900 flex items-center justify-center gap-1 mt-2"
             >
               {showMoreQueries ? '- Ver menos' : '+ Ver más ejemplos'}
             </button>
@@ -216,11 +216,11 @@ export default function SchemaOverview() {
 
       {/* Start Button */}
       <div className="mx-6 mb-6 border border-gray-200 rounded-lg overflow-hidden">
-        <button className="w-full px-4 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold flex items-center justify-center gap-2 transition-all">
+        <button className="w-full px-4 py-4 bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-800 hover:to-slate-900 text-white font-semibold flex items-center justify-center gap-2 transition-all">
           <Sparkles size={20} />
           🚀 Empezar a preguntar
         </button>
-        <div className="bg-blue-50 border-t border-gray-200 px-4 py-3">
+        <div className="bg-slate-50 border-t border-gray-200 px-4 py-3">
           <p className="text-xs text-gray-600 mb-2">O escribe tu pregunta aquí:</p>
           <div className="border border-gray-300 rounded-lg p-3 bg-white text-sm text-gray-500">
             Pregúntale cualquier cosa a tus datos...

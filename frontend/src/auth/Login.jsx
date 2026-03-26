@@ -72,22 +72,22 @@ export const Login = () => {
 
   if (checkingAuth || (location.pathname === "/callback" && isLoading)) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex items-center justify-center px-4">
         <div className="space-y-8 text-center">
           <div className="flex justify-center">
             <div className="relative">
-              <div className="absolute inset-0 bg-blue-500/10 blur-lg rounded-full"></div>
-              <Shield className="w-16 h-16 text-blue-600 relative" strokeWidth={1.5} />
+              <div className="absolute inset-0 bg-slate-700/10 blur-lg rounded-full"></div>
+              <Shield className="w-16 h-16 text-slate-700 relative" strokeWidth={1.5} />
             </div>
           </div>
           <div>
-            <div className="text-blue-600 text-sm font-medium">
+            <div className="text-slate-700 text-sm font-medium">
               Completando autenticación segura...
             </div>
             <div className="mt-4 flex justify-center gap-2">
-              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{animationDelay: '0s'}}></div>
-              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
+              <div className="w-2 h-2 bg-slate-700 rounded-full animate-bounce" style={{animationDelay: '0s'}}></div>
+              <div className="w-2 h-2 bg-slate-700 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+              <div className="w-2 h-2 bg-slate-700 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
             </div>
           </div>
         </div>
@@ -96,11 +96,11 @@ export const Login = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center px-4 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex items-center justify-center px-4 relative overflow-hidden">
       {/* Subtle background accents */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-100/30 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-100/20 rounded-full blur-3xl"></div>
+        <div className="absolute top-0 right-0 w-96 h-96 bg-slate-100/30 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-slate-100/20 rounded-full blur-3xl"></div>
       </div>
 
       {/* Content */}
@@ -109,9 +109,9 @@ export const Login = () => {
         <div className="text-center mb-12">
           <div className="flex justify-center mb-6">
             <div className="relative">
-              <div className="absolute inset-0 bg-blue-600/10 blur-lg rounded-lg"></div>
-              <div className="relative bg-white p-4 rounded-lg border border-blue-200 shadow-sm">
-                <Shield className="w-10 h-10 text-blue-600" strokeWidth={1.5} />
+              <div className="absolute inset-0 bg-slate-700/10 blur-lg rounded-lg"></div>
+              <div className="relative bg-white p-4 rounded-lg border border-slate-300 shadow-sm">
+                <Shield className="w-10 h-10 text-slate-700" strokeWidth={1.5} />
               </div>
             </div>
           </div>
@@ -167,11 +167,11 @@ export const Login = () => {
           {/* Security Info */}
           <div className="mt-8 pt-6 border-t border-gray-200 space-y-3">
             <div className="flex items-start gap-3 text-sm">
-              <Shield className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" strokeWidth={2} />
+              <Shield className="w-4 h-4 text-slate-700 mt-0.5 flex-shrink-0" strokeWidth={2} />
               <span className="text-gray-700">Protegido por autenticación multinivel</span>
             </div>
             <div className="flex items-start gap-3 text-sm">
-              <Lock className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" strokeWidth={2} />
+              <Lock className="w-4 h-4 text-slate-700 mt-0.5 flex-shrink-0" strokeWidth={2} />
               <span className="text-gray-700">Cumplimiento con estándares empresariales</span>
             </div>
             <div className="flex items-start gap-3 text-sm">

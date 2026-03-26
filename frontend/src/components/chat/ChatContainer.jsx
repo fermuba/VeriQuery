@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Loader2, Database, Menu } from 'lucide-react'
+import { Send, Loader2, Database, Menu, ChevronLeft } from 'lucide-react'
 import { useAppStore } from '../../store/useAppStore'
 import MessageItem from './MessageItem'
 import DynamicSuggestedPrompts from './DynamicSuggestedPrompts'
@@ -27,7 +27,22 @@ export default function ChatContainer() {
 
   const fetchTables = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/schema', {
+      // STEP 1: Extract database name from selectedDatabase
+      // selectedDatabase might be an object with 'name' property or just a string
+      const dbName = selectedDatabase?.name || selectedDatabase
+      
+      if (!dbName) {
+        console.warn('No database name available for schema fetch')
+        return
+      }
+      
+      // STEP 2: Fetch schema with database_name parameter
+      // This ensures we get the correct schema for the selected database
+      const url = new URL('http://localhost:8000/api/schema')
+      url.searchParams.append('database_name', dbName)
+      
+      const response = await fetch(url.toString(), {
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token') || 'demo'}`,
         }
@@ -42,6 +57,7 @@ export default function ChatContainer() {
           row_count: info.row_count || 0
         }))
         setTables(tablesArray)
+        console.info(`✅ Loaded ${tablesArray.length} tables for database: ${dbName}`)
       }
     } catch (err) {
       console.error('Error fetching tables:', err)
@@ -96,13 +112,22 @@ export default function ChatContainer() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
       {/* Header */}
       <div className="px-6 py-4 border-b border-border shrink-0">
-        <div className="space-y-3">
-          <div>
-            <h2 className="text-base font-semibold text-foreground">Auditoría Interactiva</h2>
-            <p className="text-xs text-muted-foreground">Consulta forense con IA</p>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => useAppStore.setState({ selectedDatabase: null })}
+              className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              title="Cambiar de base de datos"
+            >
+              <ChevronLeft className="w-5 h-5" strokeWidth={2} />
+            </button>
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Auditoría Interactiva</h2>
+              <p className="text-xs text-muted-foreground">Consulta forense con IA</p>
+            </div>
           </div>
-          <DatabaseStatusBanner />
         </div>
+        <DatabaseStatusBanner />
       </div>
 
       {/* Messages Area */}

@@ -95,7 +95,7 @@ export default function DynamicSuggestedPrompts({ tables = [], onSelect }) {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: index * 0.05 }}
               onClick={() => onSelect(prompt.text)}
-              className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-border bg-card hover:bg-accent hover:border-primary/40 hover:text-primary transition-all duration-200 group cursor-pointer"
+              className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-border bg-card hover:bg-muted/60 hover:border-primary/40 hover:text-foreground transition-all duration-200 group cursor-pointer"
             >
               <IconComponent className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
               <span className="font-medium">{prompt.text}</span>

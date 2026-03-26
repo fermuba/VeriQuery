@@ -124,33 +124,63 @@ async def scan_schema(request: SchemaScanRequest, db_name: Optional[str] = None)
 
 
 @router.get("/")
-async def get_cached_schema():
-    """Get currently cached schema (from active database)"""
-    if not db_connector.active_database:
-        raise HTTPException(status_code=400, detail="No active database set")
+async def get_cached_schema(database_name: Optional[str] = None):
+    """
+    Get currently cached schema.
     
-    schema, error = db_connector.scan_schema()
+    Args:
+        database_name: Optional database name. If provided, returns schema for that database.
+                       If not provided, returns schema for currently active database.
     
-    if error:
-        raise HTTPException(status_code=400, detail=error)
+    Returns:
+        SchemaResponse with tables, table count, and database info
+    """
+    try:
+        # STEP 1: Determine which database to fetch schema for
+        if database_name:
+            logger.info(f"📊 GET /api/schema with database_name={database_name}")
+            # Set the active database first
+            success, msg = db_connector.set_active_database(database_name)
+            if not success:
+                raise HTTPException(status_code=404, detail=f"Database '{database_name}' not found or cannot be activated")
         
-    # Convertir al formato que espera el frontend
-    tables_dict = {}
-    for table_name, data in schema.items():
-        # Extraer solo los nombres de columna (son dicts con "name", "type", etc.)
-        column_names = [col["name"] if isinstance(col, dict) else col for col in data["columns"]]
-        tables_dict[table_name] = {
-            "columns": column_names,
-            "row_count": data["row_count"],
-            "column_count": len(column_names)
+        # STEP 2: Verify we have an active database
+        if not db_connector.active_database:
+            raise HTTPException(status_code=400, detail="No active database set")
+        
+        # STEP 3: Scan schema for the active database
+        schema, error = db_connector.scan_schema(database_name)
+        
+        if error:
+            logger.error(f"Schema scan error for {database_name or 'active'}: {error}")
+            raise HTTPException(status_code=400, detail=error)
+        
+        # STEP 4: Convert to frontend format
+        tables_dict = {}
+        for table_name, data in schema.items():
+            # Extract just column names (columns are dicts with "name", "type", etc.)
+            column_names = [col["name"] if isinstance(col, dict) else col for col in data["columns"]]
+            tables_dict[table_name] = {
+                "columns": column_names,
+                "row_count": data.get("row_count", 0),
+                "column_count": len(column_names)
+            }
+        
+        active_db_name = db_connector.active_database.name if db_connector.active_database else "unknown"
+        logger.info(f"✅ Schema retrieved: {len(tables_dict)} tables from {active_db_name}")
+        
+        return {
+            "tables": tables_dict,
+            "table_count": len(tables_dict),
+            "database_name": active_db_name,
+            "error": None,
         }
     
-    return {
-        "tables": tables_dict,
-        "table_count": len(tables_dict),
-        "database_name": db_connector.active_database.name,
-        "error": None,
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_cached_schema: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 
 @router.post("/export", response_model=SchemaExportResponse)

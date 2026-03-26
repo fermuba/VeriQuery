@@ -57,6 +57,7 @@ from database import (
     get_connector_info,
     DatabaseConnector,
 )
+from database.multi_db_connector import MultiDatabaseConnector
 
 # Import routers
 from .database_management_router import router as db_router
@@ -220,6 +221,8 @@ class QueryRequest(BaseModel):
     history: Optional[List[Dict[str, str]]] = Field(default_factory=list, description="Chat history for context")
     user_id: Optional[str] = Field(default="demo_user", description="User identifier")
     organization_id: Optional[int] = Field(default=1, description="Organization ID")
+    database_name: Optional[str] = Field(default=None, description="Database name to use for query execution")
+    session_id: Optional[str] = Field(default=None, description="Session identifier")
     
     model_config = {
         "json_schema_extra": {
@@ -442,6 +445,98 @@ async def process_query(request: QueryRequest) -> QueryResponse:
         logger.info(f"[{query_id}] Input validated: threat_level={validation_result.threat_level.value}")
         
         # =====================================================================
+        # STEP 1.5: ACTIVATE DATABASE IF PROVIDED (Sync schema with NL2SQL)
+        # =====================================================================
+        
+        if request.database_name and app_state.nl2sql_gen:
+            logger.debug(f"[{query_id}] Synchronizing NL2SQL schema for database: {request.database_name}")
+            try:
+                # Load schema from the specified database and sync it to nl2sql_generator
+                # This ensures NL2SQL uses the correct table structure for SQL generation
+                
+                # Get MultiDatabaseConnector to fetch schema
+                from src.backend.database.multi_db_connector import MultiDatabaseConnector
+                multi_connector = MultiDatabaseConnector()
+                
+                logger.debug(f"[{query_id}] Attempting to scan schema for: {request.database_name}")
+                # Scan the schema from the requested database
+                schema, error = multi_connector.scan_schema(request.database_name)
+                
+                if error:
+                    logger.warning(f"[{query_id}] ⚠️  Failed to load schema for {request.database_name}: {error}")
+                    # Don't return error - continue with existing schema in NL2SQL
+                elif not schema:
+                    logger.warning(f"[{query_id}] ⚠️  Schema is empty for {request.database_name}")
+                else:
+                    # Convert schema to text format for nl2sql_generator
+                    config = multi_connector.active_database
+                    if config:
+                        schema_text = f"=== SCHEMA: {request.database_name} ({config.db_type}) ===\n\n"
+                        for table_name, data in schema.items():
+                            col_names = [col["name"] if isinstance(col, dict) else col for col in data["columns"]]
+                            cols = ", ".join(col_names)
+                            schema_text += f"{table_name}({cols})\n"
+                        
+                        # Sync the schema into nl2sql_generator
+                        app_state.nl2sql_gen.set_active_schema_direct(
+                            db_name=request.database_name,
+                            db_type=config.db_type,
+                            schema_text=schema_text
+                        )
+                        logger.info(f"[{query_id}] ✅ NL2SQL schema synced for {request.database_name} ({len(schema_text)} chars, {len(schema)} tables)")
+                    else:
+                        logger.warning(f"[{query_id}] ⚠️  No active database config for {request.database_name}")
+            except Exception as e:
+                logger.warning(f"[{query_id}] ⚠️  Failed to sync NL2SQL schema (will continue): {e}", exc_info=True)
+        
+        # =====================================================================
+        # STEP 1.6: SWITCH DATABASE CONNECTOR IF NEEDED
+        # =====================================================================
+        
+        active_connector = app_state.db_connector  # Default to current connector
+        
+        if request.database_name:
+            try:
+                from src.backend.database.multi_db_connector import MultiDatabaseConnector
+                from src.backend.database.factory import create_connector
+                
+                multi_connector = MultiDatabaseConnector()
+                config = multi_connector.config_manager.get_database(request.database_name)
+                
+                if config:
+                    # Get or create a connector for this specific database
+                    # Try to get full credentials from Key Vault
+                    success, msg = multi_connector.set_active_database(request.database_name)
+                    if success and multi_connector.active_database:
+                        actual_config = multi_connector.active_database
+                        logger.debug(f"[{query_id}] Creating connector for {request.database_name} ({actual_config.db_type})")
+                        
+                        # Create a new connector for this database
+                        from src.backend.database.factory import create_connector
+                        new_connector = create_connector(
+                            db_type=actual_config.db_type,
+                            host=actual_config.host,
+                            port=actual_config.port,
+                            database=actual_config.database,
+                            username=actual_config.username,
+                            password=actual_config.password,
+                            filepath=actual_config.filepath
+                        )
+                        
+                        if new_connector:
+                            new_connector.connect()
+                            active_connector = new_connector
+                            logger.info(f"[{query_id}] ✅ Switched to database connector: {request.database_name}")
+                        else:
+                            logger.warning(f"[{query_id}] ⚠️  Could not create connector for {request.database_name}")
+                    else:
+                        logger.warning(f"[{query_id}] ⚠️  Could not get credentials for {request.database_name}: {msg}")
+                else:
+                    logger.warning(f"[{query_id}] ⚠️  Database config not found: {request.database_name}")
+            except Exception as e:
+                logger.warning(f"[{query_id}] ⚠️  Failed to switch database connector (will continue with default): {e}", exc_info=True)
+
+                # =====================================================================
         # STEP 2: GENERATE SQL WITH NL2SQL GENERATOR
         # =====================================================================
         
@@ -578,7 +673,7 @@ async def process_query(request: QueryRequest) -> QueryResponse:
         logger.debug(f"[{query_id}] Executing SQL against database")
         query_exec_time = datetime.now()
         
-        db_result = app_state.db_connector.execute_query(generated_sql)
+        db_result = active_connector.execute_query(generated_sql)
         
         if not db_result.success:
             # If table doesn't exist, try with alternative table names
@@ -632,7 +727,7 @@ async def process_query(request: QueryRequest) -> QueryResponse:
                                 # Use case-insensitive regex replacement
                                 test_sql = re.sub(rf'\b{failed_table}\b', alt_table, generated_sql, flags=re.IGNORECASE)
                                 logger.info(f"[{query_id}] Trying alternative: {failed_table} -> {alt_table}")
-                                db_result = app_state.db_connector.execute_query(test_sql)
+                                db_result = active_connector.execute_query(test_sql)
                                 
                                 if db_result.success:
                                     logger.info(f"[{query_id}] ✅ Success with {alt_table}")
@@ -693,7 +788,7 @@ async def process_query(request: QueryRequest) -> QueryResponse:
                         test_sql = re.sub(rf'\b{re.escape(failed_column)}\b', f'[{failed_column}]', generated_sql)
                         if test_sql != generated_sql:
                             logger.info(f"[{query_id}] Trying with brackets: [{failed_column}]")
-                            db_result = app_state.db_connector.execute_query(test_sql)
+                            db_result = active_connector.execute_query(test_sql)
                             if db_result.success:
                                 logger.info(f"[{query_id}] ✅ Query succeeded with bracketed column names")
                                 generated_sql = test_sql
@@ -806,13 +901,94 @@ async def process_query(request: QueryRequest) -> QueryResponse:
 
 
 @app.get("/api/examples", response_model=ExamplesResponse, tags=["Examples"])
-async def get_examples():
+async def get_examples(database_name: Optional[str] = None):
     """
     Get example queries to display in frontend.
+    
+    Args:
+        database_name: Optional database name to generate context-specific examples
     
     Returns:
         ExamplesResponse: List of example queries
     """
+    examples = []
+    
+    # STEP 1: If database_name provided, generate examples based on actual schema
+    if database_name and app_state.nl2sql_gen:
+        try:
+            # Get database config
+            multi_connector = MultiDatabaseConnector()
+            config = multi_connector.config_manager.get_database(database_name)
+            
+            if config:
+                success, msg = multi_connector.set_active_database(database_name)
+                if success:
+                    # Scan schema for the database
+                    schema_dict = multi_connector.scan_schema(database_name)
+                    
+                    if schema_dict:
+                        # Extract table names from schema
+                        tables = []
+                        
+                        # Handle different schema dictionary structures
+                        for db_type, db_schemas in schema_dict.items():
+                            if isinstance(db_schemas, dict):
+                                # Schema is {schema_name: [table_list]}
+                                for schema_name, table_list in db_schemas.items():
+                                    if isinstance(table_list, list):
+                                        for table_obj in table_list:
+                                            if isinstance(table_obj, dict):
+                                                table_name = table_obj.get('name') or table_obj.get('table_name', '')
+                                                if table_name:
+                                                    tables.append(table_name.lower())
+                        
+                        logger.info(f"📚 Generating examples for {database_name}: {len(tables)} tables found → {tables[:5]}")
+                        
+                        # Generate examples based on available tables
+                        if tables:
+                            # Create table-specific examples
+                            table_set = set(tables)
+                            
+                            if any(t in table_set for t in ['customers', 'clientes', 'customer']):
+                                examples.append("¿Cuántos clientes tenemos en total?")
+                                examples.append("¿Quién es el cliente con mayor compra histórica?")
+                            
+                            if any(t in table_set for t in ['orders', 'pedidos', 'order']):
+                                examples.append("¿Cuántos pedidos se realizaron este mes?")
+                                examples.append("¿Cuál es el estado promedio de los pedidos?")
+                            
+                            if any(t in table_set for t in ['products', 'productos', 'product']):
+                                examples.append("¿Cuál es el producto más vendido?")
+                                examples.append("¿Cuántos productos tenemos disponibles?")
+                            
+                            if any(t in table_set for t in ['sales', 'ventas', 'sales']):
+                                examples.append("¿Cuál es el total de ventas por región?")
+                                examples.append("¿En qué mes tuvimos más ventas?")
+                            
+                            if any(t in table_set for t in ['transactions', 'transacciones', 'transaction']):
+                                examples.append("¿Cuántas transacciones se realizaron en marzo?")
+                            
+                            # If we have examples, deduplicate and return them
+                            if examples:
+                                # Remove duplicates while preserving order
+                                seen = set()
+                                unique_examples = []
+                                for ex in examples:
+                                    if ex not in seen:
+                                        seen.add(ex)
+                                        unique_examples.append(ex)
+                                
+                                logger.info(f"✅ Generated {len(unique_examples)} dynamic examples for {database_name}")
+                                return ExamplesResponse(
+                                    examples=unique_examples[:5],  # Return max 5 examples
+                                    count=len(unique_examples[:5])
+                                )
+        
+        except Exception as e:
+            logger.warning(f"⚠️ Could not generate dynamic examples for {database_name}: {str(e)}", exc_info=False)
+            # Fall through to default examples
+    
+    # STEP 2: Fall back to default generic examples
     examples = [
         "¿Cuántos clientes tenemos en total?",
         "¿Cuál es el producto más vendido?",
@@ -827,9 +1003,69 @@ async def get_examples():
     )
 
 
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
+@app.get("/api/query/examples", response_model=ExamplesResponse, tags=["Examples"])
+async def get_query_examples(database_name: Optional[str] = None):
+    """
+    Alias endpoint for /api/examples to match frontend expectations.
+    Get example queries to display in frontend based on selected database.
+    
+    Args:
+        database_name: Optional database name to generate context-specific examples
+    
+    Returns:
+        ExamplesResponse: List of example queries
+    """
+    return await get_examples(database_name)
+
+
+@app.get("/api/debug/databases", tags=["Debug"])
+async def debug_databases():
+    """
+    DEBUG ENDPOINT: Check database configurations and credentials.
+    Shows which databases are configured and their connection status.
+    """
+    try:
+        from src.backend.database.multi_db_connector import MultiDatabaseConnector
+        multi_connector = MultiDatabaseConnector()
+        
+        databases = multi_connector.list_databases()
+        result = {
+            "databases": {},
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        for db_name in databases:
+            try:
+                config = multi_connector.config_manager.get_database(db_name)
+                if config:
+                    # Try to get full credentials from Key Vault
+                    success, msg = multi_connector.set_active_database(db_name)
+                    active_db = multi_connector.active_database
+                    
+                    result["databases"][db_name] = {
+                        "db_type": config.db_type,
+                        "host": config.host,
+                        "port": config.port,
+                        "database": config.database,
+                        "username": config.username,
+                        "password_present": bool(active_db.password if active_db else None),
+                        "connection_success": success,
+                        "connection_message": msg,
+                    }
+            except Exception as e:
+                result["databases"][db_name] = {
+                    "error": str(e)
+                }
+        
+        return result
+    except Exception as e:
+        logger.error(f"Debug endpoint error: {e}", exc_info=True)
+        return {
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
 
 def _get_elapsed_ms(start_time: datetime) -> float:
     """Calculate elapsed time in milliseconds."""

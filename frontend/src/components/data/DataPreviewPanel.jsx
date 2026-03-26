@@ -1,52 +1,9 @@
-import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell
-} from 'recharts'
 import { motion } from 'framer-motion'
 import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import AuditLog from './AuditLog'
 import { Activity, BarChart3 } from 'lucide-react'
-
-const accessData = [
-  { dia: 'Lun', normal: 142, anomalo: 2 },
-  { dia: 'Mar', normal: 158, anomalo: 0 },
-  { dia: 'Mié', normal: 134, anomalo: 1 },
-  { dia: 'Jue', normal: 167, anomalo: 3 },
-  { dia: 'Vie', normal: 149, anomalo: 1 },
-  { dia: 'Sáb', normal: 43,  anomalo: 2 },
-  { dia: 'Dom', normal: 21,  anomalo: 1 },
-]
-
-const riskData = [
-  { name: 'Crítico', value: 2,  color: '#ef4444' },
-  { name: 'Alto',    value: 5,  color: '#f97316' },
-  { name: 'Medio',   value: 12, color: '#eab308' },
-  { name: 'Bajo',    value: 31, color: '#22c55e' },
-]
-
-const hourlyData = [
-  { hora: '00', accesos: 3 },
-  { hora: '03', accesos: 1 },
-  { hora: '06', accesos: 8 },
-  { hora: '09', accesos: 47 },
-  { hora: '12', accesos: 62 },
-  { hora: '15', accesos: 55 },
-  { hora: '18', accesos: 38 },
-  { hora: '21', accesos: 12 },
-]
-
-const CustomTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bento-card px-3 py-2 text-xs">
-      <p className="font-medium text-foreground mb-1">{label}</p>
-      {payload.map(p => (
-        <p key={p.name} style={{ color: p.color }}>{p.name}: {p.value}</p>
-      ))}
-    </div>
-  )
-}
+import { SimpleAreaChart, SimpleBarChart, SimplePieChart } from '../charts/SimpleCharts'
 
 function Section({ title, children }) {
   return (
@@ -59,8 +16,79 @@ function Section({ title, children }) {
 
 export default function DataPreviewPanel() {
   const [activeTab, setActiveTab] = useState('audit')
-  const total = riskData.reduce((s, d) => s + d.value, 0)
-  const { auditEvents } = useAppStore()
+  const { auditEvents, queryResult } = useAppStore()
+
+  // ============================================================================
+  // CALCULAR DATOS DINÁMICOS DEL AUDIT LOG
+  // ============================================================================
+
+  // Últimos 7 días de eventos
+  const last7Days = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date()
+    date.setDate(date.getDate() - (6 - i))
+    return date.toLocaleDateString('es-ES', { weekday: 'short' }).substring(0, 3)
+  })
+
+  // Contar eventos por día
+  const accessDataByDay = last7Days.map(dia => {
+    const dayEvents = auditEvents.filter(e => {
+      const eventDate = new Date(e.timestamp)
+      const eventDay = eventDate.toLocaleDateString('es-ES', { weekday: 'short' }).substring(0, 3)
+      return eventDay === dia
+    })
+    
+    const normal = dayEvents.filter(e => e.status === 'success').length
+    const anomalo = dayEvents.filter(e => e.status === 'failed' || e.type === 'error').length
+    
+    return { dia, normal, anomalo: anomalo || 0 }
+  })
+
+  // Contar eventos por tipo para distribución de riesgo
+  const riskDistribution = [
+    { 
+      nombre: 'Crítico', 
+      valor: auditEvents.filter(e => e.type === 'error' || (e.status === 'failed' && e.error?.includes('seguridad'))).length || 0 
+    },
+    { 
+      nombre: 'Alto', 
+      valor: auditEvents.filter(e => e.status === 'failed').length || 0 
+    },
+    { 
+      nombre: 'Medio', 
+      valor: auditEvents.filter(e => e.status === 'processing').length || 0 
+    },
+    { 
+      nombre: 'Bajo', 
+      valor: auditEvents.filter(e => e.status === 'success').length * 0.3 || 0
+    },
+  ]
+
+  // Accesos por hora (simular con eventos)
+  const hourlyAccessData = Array.from({ length: 8 }, (_, i) => {
+    const hora = (i * 3).toString().padStart(2, '0')
+    const accesos = auditEvents.filter(e => {
+      const eventHour = new Date(e.timestamp).getHours()
+      return eventHour >= i * 3 && eventHour < (i + 1) * 3
+    }).length || 0
+    return { hora, accesos }
+  })
+
+  // KPI: Total de anomalías en últimos 7 días
+  const totalAnomalies = auditEvents.filter(e => {
+    const eventDate = new Date(e.timestamp)
+    const daysAgo = Math.floor((Date.now() - eventDate) / (1000 * 60 * 60 * 24))
+    return daysAgo <= 7 && (e.status === 'failed' || e.type === 'error')
+  }).length
+
+  // KPI: Máximo riesgo
+  const maxRisk = riskDistribution.reduce((max, r) => r.valor > max ? r.valor : max, 0)
+  const riskLevel = maxRisk === 0 ? 'BAJO' : maxRisk <= 5 ? 'BAJO' : maxRisk <= 10 ? 'MEDIO' : 'ALTO'
+
+  // KPI: Total de consultas
+  const totalQueries = auditEvents.filter(e => e.type === 'query').length
+
+  // KPI: IPs bloqueadas (simulado)
+  const blockedIPs = auditEvents.filter(e => e.status === 'failed' && e.error?.includes('bloqueada')).length
 
   return (
     <div className="p-4 flex flex-col gap-4 overflow-y-auto scrollbar-thin h-full">
@@ -125,10 +153,10 @@ export default function DataPreviewPanel() {
           {/* KPIs */}
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: 'Anomalías', value: '10', sub: 'últimos 7 días', color: 'text-destructive' },
-              { label: 'Riesgo Máx.', value: 'MEDIO', sub: 'evaluado por IA', color: 'text-warning' },
-              { label: 'Consultas', value: '284', sub: 'esta semana', color: 'text-primary' },
-              { label: 'IPs bloqueadas', value: '3', sub: 'en cuarentena', color: 'text-success' },
+              { label: 'Anomalías', value: totalAnomalies.toString(), sub: 'últimos 7 días', color: 'text-destructive' },
+              { label: 'Riesgo Máx.', value: riskLevel, sub: 'evaluado por IA', color: 'text-warning' },
+              { label: 'Consultas', value: totalQueries.toString(), sub: 'esta semana', color: 'text-primary' },
+              { label: 'IPs bloqueadas', value: blockedIPs.toString(), sub: 'en cuarentena', color: 'text-success' },
             ].map(k => (
               <div key={k.label} className="bento-card p-4">
                 <p className="text-xs text-muted-foreground">{k.label}</p>
@@ -139,67 +167,32 @@ export default function DataPreviewPanel() {
           </div>
 
           {/* Accesos por día */}
-          <Section title="Accesos diarios">
-            <div className="bento-card p-3">
-              <ResponsiveContainer width="100%" height={110}>
-                <AreaChart data={accessData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gNormal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#0284c7" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="#0284c7" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="gAnomalo" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#ef4444" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="dia" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Area type="monotone" dataKey="normal"  name="Normal"  stroke="#0284c7" fill="url(#gNormal)"  strokeWidth={1.5} />
-                  <Area type="monotone" dataKey="anomalo" name="Anómalo" stroke="#ef4444" fill="url(#gAnomalo)" strokeWidth={1.5} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </Section>
+          <SimpleAreaChart
+            data={accessDataByDay}
+            xKey="dia"
+            yKey={['normal', 'anomalo']}
+            title="Accesos Diarios - Últimos 7 días"
+            height={250}
+          />
 
           {/* Distribución de riesgo */}
-          <Section title="Distribución de riesgo">
-            <div className="bento-card p-3 flex items-center gap-4">
-              <ResponsiveContainer width={90} height={90}>
-                <PieChart>
-                  <Pie data={riskData} cx="50%" cy="50%" innerRadius={26} outerRadius={42} dataKey="value" strokeWidth={0}>
-                    {riskData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="flex flex-col gap-1.5 flex-1">
-                {riskData.map(d => (
-                  <div key={d.name} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
-                      <span className="text-muted-foreground">{d.name}</span>
-                    </div>
-                    <span className="font-medium text-foreground">{Math.round(d.value / total * 100)}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Section>
+          <SimplePieChart
+            data={riskDistribution}
+            nameKey="nombre"
+            valueKey="valor"
+            title="Distribución de Riesgos"
+            height={280}
+            donut={true}
+          />
 
           {/* Accesos por hora */}
-          <Section title="Accesos por hora del día">
-            <div className="bento-card p-3">
-              <ResponsiveContainer width="100%" height={90}>
-                <BarChart data={hourlyData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
-                  <XAxis dataKey="hora" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="accesos" name="Accesos" fill="#0284c7" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Section>
+          <SimpleBarChart
+            data={hourlyAccessData}
+            xKey="hora"
+            yKey="accesos"
+            title="Accesos por Hora del Día"
+            height={250}
+          />
         </motion.div>
       )}
     </div>
