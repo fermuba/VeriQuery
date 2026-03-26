@@ -6,6 +6,7 @@ Orchestrates connections to multiple databases with configuration persistence
 from typing import Dict, List, Optional, Tuple
 import sys
 from pathlib import Path
+import logging
 
 # Add tools to path
 tools_path = str(Path(__file__).parent.parent.parent.parent / "tools")
@@ -15,6 +16,9 @@ if tools_path not in sys.path:
 from connection_manager import DatabaseConfig, ConnectionManager
 from bd_config_manager import BDConfigManager
 from schema_scanner import SchemaScanner
+from secure_credential_store import SecureCredentialStore
+
+logger = logging.getLogger(__name__)
 
 
 class MultiDatabaseConnector:
@@ -29,6 +33,12 @@ class MultiDatabaseConnector:
         """
         self.config_manager = BDConfigManager(config_dir)
         self.active_database: Optional[DatabaseConfig] = None
+        
+        # Initialize Key Vault client (optional)
+        try:
+            self.cred_store = SecureCredentialStore()
+        except Exception:
+            self.cred_store = None
 
     def test_connection(self, config: DatabaseConfig) -> Tuple[bool, str]:
         """
@@ -45,6 +55,8 @@ class MultiDatabaseConnector:
     def set_active_database(self, database_name: str) -> Tuple[bool, str]:
         """
         Set the active database for queries
+        
+        FIX: Recupera credenciales de Key Vault si existen
 
         Args:
             database_name: Name of saved database configuration
@@ -55,6 +67,19 @@ class MultiDatabaseConnector:
         config = self.config_manager.get_database(database_name)
         if not config:
             return False, f"Database '{database_name}' not found"
+
+        # Si Key Vault está disponible, recuperar credenciales completas
+        if self.cred_store:
+            try:
+                credentials, error = self.cred_store.get_credentials(database_name)
+                if credentials and not error:
+                    # Merge credenciales de Key Vault con config local
+                    config.password = credentials.get("password")
+                    logger.info(f"✓ Credentials loaded from Key Vault for: {database_name}")
+                else:
+                    logger.debug(f"No Key Vault credentials found for {database_name}, using local config")
+            except Exception as e:
+                logger.warning(f"Could not retrieve from Key Vault: {str(e)}")
 
         self.active_database = config
         return True, f"Active database set to '{database_name}'"
