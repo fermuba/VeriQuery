@@ -17,19 +17,19 @@ import {
   AreaChart, Area,
   ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend
 } from 'recharts'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, BarChart3 } from 'lucide-react'
 import { useState } from 'react'
 
-// Paleta de colores moderna y accesible
+// Paleta de colores sobria y profesional (gris y tonos neutros)
 const COLORS = [
-  '#8b5cf6', // púrpura
-  '#06b6d4', // cyan
-  '#f59e0b', // ámbar
-  '#ec4899', // rosa
-  '#10b981', // esmeralda
-  '#6366f1', // índigo
-  '#f97316', // naranja
-  '#14b8a6', // verde azulado
+  '#37474f', // Gris oscuro principal
+  '#546e7a', // Gris medio
+  '#78909c', // Gris claro
+  '#90caf9', // Azul suave
+  '#66bb6a', // Verde suave
+  '#ffa726', // Naranja suave
+  '#ef5350', // Rojo suave
+  '#ab47bc', // Púrpura suave
 ]
 
 /**
@@ -140,20 +140,30 @@ function BarChartComponent({ data, xAxis, yAxis }) {
   return (
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={data} margin={{ top: 5, right: 30, left: 0, bottom: 50 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" vertical={false} />
         <XAxis 
           dataKey={xAxis} 
           angle={-45}
           textAnchor="end"
           height={100}
-          tick={{ fontSize: 12 }}
+          tick={{ fontSize: 12, fill: '#9e9e9e' }}
+          axisLine={{ stroke: '#e0e0e0' }}
         />
-        <YAxis tick={{ fontSize: 12 }} />
+        <YAxis 
+          tick={{ fontSize: 12, fill: '#9e9e9e' }}
+          axisLine={{ stroke: '#e0e0e0' }}
+        />
         <Tooltip 
-          contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
-          formatter={(value) => value.toLocaleString?.() || value}
+          contentStyle={{ 
+            backgroundColor: '#fff', 
+            border: '1px solid #e0e0e0', 
+            borderRadius: '8px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+          }}
+          formatter={(value) => [value.toLocaleString?.() || value, '']}
+          labelStyle={{ color: '#37474f', fontWeight: 600 }}
         />
-        <Bar dataKey={yAxis} fill="#8b5cf6" radius={[8, 8, 0, 0]} />
+        <Bar dataKey={yAxis} fill="#546e7a" radius={[8, 8, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   )
@@ -337,14 +347,17 @@ export default function ChartRenderer({ data, title = 'Visualización de datos' 
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 space-y-4">
-      <button
-        onClick={() => setShowChart(!showChart)}
-        className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
-      >
-        <span>📊 {title}</span>
-        <ChevronDown className={`w-4 h-4 transition-transform ${showChart ? 'rotate-180' : ''}`} />
-      </button>
+    <div className="rounded-lg bg-card space-y-3">
+      {title && (
+        <button
+          onClick={() => setShowChart(!showChart)}
+          className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary transition-colors w-full"
+        >
+          <BarChart3 className="w-4 h-4 text-gray-600" strokeWidth={1.5} />
+          <span>{title}</span>
+          <ChevronDown className={`w-4 h-4 transition-transform ml-auto ${showChart ? 'rotate-180' : ''}`} />
+        </button>
+      )}
 
       {showChart && (
         <div className="w-full overflow-x-auto">
@@ -353,6 +366,15 @@ export default function ChartRenderer({ data, title = 'Visualización de datos' 
           {chartType === 'area' && <AreaChartComponent data={data} {...columns} />}
           {chartType === 'pie' && <PieChartComponent data={data} {...columns} />}
           {chartType === 'table' && <TableComponent data={data} />}
+          
+          {/* Información descriptiva */}
+          <div className="text-xs text-muted-foreground mt-3 px-4 pb-2">
+            {chartType === 'bar' && '📊 Gráfico de barras - Compara valores entre categorías'}
+            {chartType === 'line' && '📈 Gráfico de líneas - Muestra tendencias en el tiempo'}
+            {chartType === 'area' && '📉 Gráfico de área - Visualiza cambios acumulativos'}
+            {chartType === 'pie' && '🥧 Gráfico de pastel - Muestra proporciones del total'}
+            {chartType === 'table' && '📋 Tabla - Datos estructurados en filas y columnas'}
+          </div>
         </div>
       )}
     </div>
