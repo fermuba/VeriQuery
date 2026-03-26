@@ -229,9 +229,11 @@ class MultiDatabaseConnector:
             Tuple of (schema_dict, error)
         """
         if database_name:
-            config = self.config_manager.get_database(database_name)
-            if not config:
-                return {}, f"Database '{database_name}' not found"
+            # IMPORTANTE: Llamar a set_active_database para cargar credenciales de Key Vault
+            success, msg = self.set_active_database(database_name)
+            if not success:
+                return {}, msg
+            config = self.active_database
         else:
             if not self.active_database:
                 return {}, "No active database set"

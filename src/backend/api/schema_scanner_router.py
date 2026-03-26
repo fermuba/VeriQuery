@@ -63,6 +63,7 @@ async def scan_schema(request: SchemaScanRequest, db_name: Optional[str] = None)
     try:
         # Usar db_name del query param si no viene en el body
         database_name = request.database_name or db_name
+        logger.info(f"🔍 SCHEMA SCAN START: database_name={database_name}, db_name_param={db_name}")
         schema, error = db_connector.scan_schema(database_name)
         
         if error:
