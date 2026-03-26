@@ -55,10 +55,15 @@ class SchemaExportResponse(BaseModel):
 # Endpoints
 
 @router.post("/scan", response_model=SchemaResponse)
-async def scan_schema(request: SchemaScanRequest):
-    """Scan database schema"""
+async def scan_schema(request: SchemaScanRequest, db_name: Optional[str] = None):
+    """Scan database schema
+    
+    Acepta database_name del body o db_name del query param
+    """
     try:
-        schema, error = db_connector.scan_schema(request.database_name)
+        # Usar db_name del query param si no viene en el body
+        database_name = request.database_name or db_name
+        schema, error = db_connector.scan_schema(database_name)
         
         if error:
             logger.error(f"Schema scan error: {error}")
