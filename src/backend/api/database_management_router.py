@@ -28,6 +28,14 @@ logger = logging.getLogger(__name__)
 
 # Initialize components
 db_connector = MultiDatabaseConnector()
+
+# Global reference to nl2sql_generator (será establecida desde main.py)
+nl2sql_generator = None
+
+def set_nl2sql_generator(generator):
+    """Called from main.py to set the nl2sql_generator instance"""
+    global nl2sql_generator
+    nl2sql_generator = generator
 try:
     cred_store = SecureCredentialStore()
     use_keyvault = True
@@ -350,6 +358,21 @@ async def delete_database(database_name: str):
     success, message = db_connector.delete_database_config(database_name)
     if not success:
         raise HTTPException(status_code=404, detail=message)
+    
+    # Si se elimina la BD activa, sincronizar nl2sql_generator para que limpie su schema
+    if nl2sql_generator and success:
+        try:
+            # Si era la BD activa, limpiar el schema
+            if nl2sql_generator._active_db_name == database_name:
+                nl2sql_generator._active_schema = None
+                nl2sql_generator._active_db_name = None
+                nl2sql_generator._active_db_type = None
+                nl2sql_generator._active_connector = None
+                nl2sql_generator._schema_loaded_at = None
+                logger.info(f"✅ Schema de nl2sql_generator limpiado para BD eliminada: {database_name}")
+        except Exception as e:
+            logger.warning(f"⚠ Error sincronizando eliminación en nl2sql_generator: {e}")
+    
     return {"success": success, "message": message}
 
 
@@ -359,6 +382,21 @@ async def activate_database(database_name: str):
     success, message = db_connector.set_active_database(database_name)
     if not success:
         raise HTTPException(status_code=404, detail=message)
+    
+    # IMPORTANTE: Sincronizar con nl2sql_generator para que tenga el schema actualizado
+    if nl2sql_generator and success:
+        try:
+            config = db_connector.active_database
+            if config:
+                nl2sql_generator.set_active_database(
+                    db_name=database_name,
+                    connector=db_connector,
+                    db_type=config.db_type
+                )
+                logger.info(f"✅ nl2sql_generator schema sincronizado para: {database_name}")
+        except Exception as e:
+            logger.warning(f"⚠ Error sincronizando nl2sql_generator: {e}")
+    
     return DatabaseActivateResponse(success=success, message=message)
 
 

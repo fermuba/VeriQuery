@@ -115,6 +115,10 @@ async def lifespan(app: FastAPI):
         app_state.nl2sql_gen = NL2SQLGenerator()
         logger.info("✅ NL2SQLGenerator initialized successfully")
         
+        # Set nl2sql_generator in database_management_router para sincronización
+        from .database_management_router import set_nl2sql_generator
+        set_nl2sql_generator(app_state.nl2sql_gen)
+        
         # 4. Initialize Database Connector
         app_state.db_connector = get_database_connector()
         logger.info(f"✅ Database connector created: {app_state.db_connector}")
