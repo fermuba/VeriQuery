@@ -187,7 +187,7 @@ class QueryCrafter:
 
 
         try:
-            user_prompt = _build_user_prompt(user_question)
+            user_prompt = _build_user_prompt(user_question, syntax_rule, ranking_example)  # ✅
 
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
