@@ -21,7 +21,7 @@ services:
       - sqlserver_data:/var/opt/mssql
 
       # Carpeta local para dejar backups .bak y scripts .sql
-      - ./assets:/assets
+      - ./assets/bak-ContosoV2-10k/dump:/assets
 
     restart: unless-stopped
 
