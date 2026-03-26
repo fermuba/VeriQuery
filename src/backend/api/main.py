@@ -41,6 +41,12 @@ sys.path.insert(0, tools_path)
 # Load environment variables
 load_dotenv()
 
+# === CRITICAL: Setup environment-aware database configuration ===
+# This must be imported BEFORE any database operations
+# It automatically selects between development (Docker) and production (Azure) credentials
+from config.environment_selector import setup_environment_variables
+setup_environment_variables()
+
 # Import components
 from security.prompt_shields import PromptShield, ThreatLevel
 from nl2sql_generator import NL2SQLGenerator
@@ -375,50 +381,6 @@ async def health_check():
         ai=ai_status,
         message="All systems operational" if all_healthy else "Some systems degraded or unavailable"
     )
-
-
-@app.get("/api/schema", tags=["Schema"])
-async def get_database_schema():
-    """Get the actual database schema - all tables and columns."""
-    try:
-        if not app_state.db_connector:
-            return {"error": "Database not connected"}
-        
-        # Query for all tables
-        tables_query = """
-        SELECT TABLE_NAME 
-        FROM INFORMATION_SCHEMA.TABLES 
-        WHERE TABLE_TYPE = 'BASE TABLE'
-        ORDER BY TABLE_NAME
-        """
-        
-        result = app_state.db_connector.execute_query(tables_query)
-        if not result.success:
-            return {"error": f"Failed to query tables: {result.error}"}
-        
-        schema = {}
-        if result.rows:
-            for (table_name,) in result.rows:
-                # Get columns for each table
-                cols_query = f"""
-                SELECT COLUMN_NAME, DATA_TYPE
-                FROM INFORMATION_SCHEMA.COLUMNS 
-                WHERE TABLE_NAME = '{table_name}'
-                ORDER BY ORDINAL_POSITION
-                """
-                
-                cols_result = app_state.db_connector.execute_query(cols_query)
-                columns = []
-                if cols_result.success and cols_result.rows:
-                    columns = [{"name": col_name, "type": col_type} for col_name, col_type in cols_result.rows]
-                
-                schema[table_name] = {"columns": columns}
-        
-        return {"tables": schema, "table_count": len(schema)}
-    
-    except Exception as e:
-        logger.error(f"Error getting schema: {e}")
-        return {"error": str(e)}
 
 
 @app.post("/api/query", response_model=QueryResponse, tags=["Query"])
@@ -793,8 +755,14 @@ async def process_query(request: QueryRequest) -> QueryResponse:
         # STEP 5: FORMAT RESPONSE
         # =====================================================================
         
-        # Generate natural language answer from data
-        answer = _format_natural_language_answer(request.question, db_result.data)
+        # Generate user-friendly answer using the nl2sql_generator's LLM
+        # Pass the actual data so the answer is based on real results
+        answer = app_state.nl2sql_gen.generate_user_friendly_answer(
+            question=request.question,
+            sql=generated_sql,
+            data=db_result.data,
+            tracer=None  # No tracer needed here, already traced in generate_sql
+        )
         
         total_time_ms = _get_elapsed_ms(start_time)
         logger.info(

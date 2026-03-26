@@ -655,6 +655,7 @@ class NL2SQLGenerator:
             return f"Tablas usadas: {', '.join(tables)}."
 
     def _generate_explanation(self, question, sql, tracer) -> str:
+        """Genera explicación del SQL ANTES de ejecutarlo."""
         try:
             response = self.client.chat.completions.create(
                 model=self.deployment,
@@ -684,3 +685,79 @@ class NL2SQLGenerator:
             return explanation
         except Exception:
             return "Consulta generada correctamente."
+
+    def generate_user_friendly_answer(self, question: str, sql: str, data: list, tracer=None) -> str:
+        """
+        Genera una respuesta amigable al usuario basada en los DATOS REALES.
+        
+        Diferencia con _generate_explanation:
+        - _generate_explanation: se ejecuta ANTES, sin datos (describe el SQL)
+        - generate_user_friendly_answer: se ejecuta DESPUÉS, con datos reales (responde la pregunta)
+        
+        Args:
+            question: Pregunta original del usuario
+            sql: SQL que se ejecutó
+            data: Resultados reales de la consulta
+            tracer: QueryTracer opcional para logging
+            
+        Returns:
+            str: Respuesta amigable basada en los datos
+        """
+        if not data:
+            return "No hay datos que coincidan con tu consulta."
+        
+        try:
+            # Preparar resumen de datos para el LLM
+            if len(data) == 1:
+                data_summary = f"1 fila retornada: {data[0]}"
+            else:
+                data_summary = f"{len(data)} filas retornadas. Primeras 3: {data[:3]}"
+            
+            # Llamar al LLM para generar respuesta
+            response = self.client.chat.completions.create(
+                model=self.deployment,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Eres un asistente que responde preguntas basándote en resultados de BD. "
+                            "Responde en ESPAÑOL, de forma concisa (1-2 oraciones), formateado con Markdown. "
+                            "Si es un número, usalo directamente. Si es moneda/dinero, formatea como $. "
+                            "Nunca menciones SQL ni tablas. Sé natural y amigable."
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Pregunta del usuario: {question}\n\n"
+                            f"Datos de la consulta:\n{data_summary}\n\n"
+                            f"Genera una respuesta natural al usuario basada en estos datos."
+                        )
+                    }
+                ],
+                max_tokens=150, 
+                temperature=0.3
+            )
+            
+            answer = response.choices[0].message.content.strip()
+            
+            if tracer:
+                tracer.step(
+                    archivo="nl2sql_generator",
+                    paso="user_friendly_answer",
+                    entrada=f"Pregunta: '{question}' | {len(data)} filas",
+                    accion="LLM genera respuesta basada en datos reales",
+                    salida=answer[:80] + "..." if len(answer) > 80 else answer
+                )
+            
+            return answer
+            
+        except Exception as e:
+            # Fallback: generar respuesta simple basada en los datos
+            logger.error(f"Error generando respuesta amigable: {e}")
+            if len(data) == 1:
+                row = data[0]
+                first_value = list(row.values())[0] if row else "resultado"
+                return f"El resultado es: **{first_value}**"
+            else:
+                return f"Encontré **{len(data)}** resultados."

@@ -62,7 +62,7 @@ class SchemaExportResponse(BaseModel):
 
 # Endpoints
 
-@router.post("/scan", response_model=SchemaResponse)
+@router.post("/scan")
 async def scan_schema(request: SchemaScanRequest, db_name: Optional[str] = None):
     """Scan database schema
     
@@ -78,14 +78,16 @@ async def scan_schema(request: SchemaScanRequest, db_name: Optional[str] = None)
             logger.error(f"Schema scan error: {error}")
             raise HTTPException(status_code=400, detail=error)
             
-        tables_list = []
+        # Convertir al formato que espera el frontend
+        tables_dict = {}
         for table_name, data in schema.items():
-            tables_list.append({
-                "name": table_name,
-                "columns": data["columns"],
-                "record_count": data["row_count"],
-                "sample_data": data["sample_data"]
-            })
+            # Extraer solo los nombres de columna (son dicts con "name", "type", etc.)
+            column_names = [col["name"] if isinstance(col, dict) else col for col in data["columns"]]
+            tables_dict[table_name] = {
+                "columns": column_names,
+                "row_count": data["row_count"],
+                "column_count": len(column_names)
+            }
         
         # IMPORTANTE: Sincronizar con nl2sql_generator para que tenga el schema actualizado
         if nl2sql_generator:
@@ -96,7 +98,7 @@ async def scan_schema(request: SchemaScanRequest, db_name: Optional[str] = None)
                     schema_text = f"=== SCHEMA: {database_name} ({config.db_type}) ===\n\n"
                     for table_name, data in schema.items():
                         # Las columnas son dicts con "name", "type", etc. Extraer solo los nombres
-                        col_names = [col["name"] for col in data["columns"]]
+                        col_names = [col["name"] if isinstance(col, dict) else col for col in data["columns"]]
                         cols = ", ".join(col_names)
                         schema_text += f"{table_name}({cols})\n"
                     
@@ -110,17 +112,18 @@ async def scan_schema(request: SchemaScanRequest, db_name: Optional[str] = None)
                 logger.warning(f"⚠ Error sincronizando nl2sql_generator: {e}", exc_info=True)
         
         logger.info(f"✓ Schema scan successful for database: {database_name}")
-        return SchemaResponse(
-            tables=tables_list,
-            database_name=database_name,
-            error=None,
-        )
+        return {
+            "tables": tables_dict,
+            "table_count": len(tables_dict),
+            "database_name": database_name,
+            "error": None,
+        }
     except Exception as e:
         logger.error(f"Unexpected error during schema scan: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 
-@router.get("", response_model=SchemaResponse)
+@router.get("/")
 async def get_cached_schema():
     """Get currently cached schema (from active database)"""
     if not db_connector.active_database:
@@ -131,20 +134,23 @@ async def get_cached_schema():
     if error:
         raise HTTPException(status_code=400, detail=error)
         
-    tables_list = []
+    # Convertir al formato que espera el frontend
+    tables_dict = {}
     for table_name, data in schema.items():
-        tables_list.append({
-            "name": table_name,
-            "columns": data["columns"],
-            "record_count": data["row_count"],
-            "sample_data": data["sample_data"]
-        })
+        # Extraer solo los nombres de columna (son dicts con "name", "type", etc.)
+        column_names = [col["name"] if isinstance(col, dict) else col for col in data["columns"]]
+        tables_dict[table_name] = {
+            "columns": column_names,
+            "row_count": data["row_count"],
+            "column_count": len(column_names)
+        }
     
-    return SchemaResponse(
-        tables=tables_list,
-        database_name=db_connector.active_database.name,
-        error=None,
-    )
+    return {
+        "tables": tables_dict,
+        "table_count": len(tables_dict),
+        "database_name": db_connector.active_database.name,
+        "error": None,
+    }
 
 
 @router.post("/export", response_model=SchemaExportResponse)

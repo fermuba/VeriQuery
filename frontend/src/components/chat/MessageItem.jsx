@@ -1,12 +1,15 @@
 import { useState } from 'react'
-import { ChevronDown, Code, BookOpen, Table as TableIcon } from 'lucide-react'
+import { ChevronDown, Code, BookOpen, Table as TableIcon, AlertCircle } from 'lucide-react'
 import ConfidenceBadge from './ConfidenceBadge'
+import ClarificationOptions from './ClarificationOptions'
+import { useAppStore } from '../../store/useAppStore'
 
 export default function MessageItem({ message }) {
   const [sqlOpen, setSqlOpen] = useState(false)
   const [explOpen, setExplOpen] = useState(false)
   const [dataOpen, setDataOpen] = useState(false)
-  const { role, text, confidence, sql, explanation, data } = message
+  const { sendQuery, isLoading } = useAppStore()
+  const { role, text, confidence, sql, explanation, data, clarification_options, decision } = message
 
   if (role === 'user') {
     return (
@@ -30,6 +33,19 @@ export default function MessageItem({ message }) {
           </div>
           {confidence != null && <ConfidenceBadge score={confidence} />}
         </div>
+
+        {/* Mostrar opciones de desambiguación si existen */}
+        {decision === 'NECESITA_ACLARACION' && clarification_options && (
+          <ClarificationOptions
+            question={text}
+            options={clarification_options}
+            onSelect={(option) => {
+              const clarificationText = typeof option === 'string' ? option : option.title
+              sendQuery(clarificationText)
+            }}
+            loading={isLoading}
+          />
+        )}
 
         {sql && (
           <div className="rounded-lg overflow-hidden">

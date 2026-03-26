@@ -1,19 +1,52 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Loader2, Database } from 'lucide-react'
+import { Send, Loader2, Database, Menu } from 'lucide-react'
 import { useAppStore } from '../../store/useAppStore'
 import MessageItem from './MessageItem'
-import SuggestedPrompts from './SuggestedPrompts'
+import DynamicSuggestedPrompts from './DynamicSuggestedPrompts'
+import TableExplorer from './TableExplorer'
 import DatabaseStatusBanner from '../database/DatabaseStatusBanner'
 import { motion } from 'framer-motion'
 
 export default function ChatContainer() {
   const [input, setInput] = useState('')
+  const [tables, setTables] = useState([])
+  const [showSidebar, setShowSidebar] = useState(true)
   const { messages, isLoading, sendQuery, selectedDatabase } = useAppStore()
   const bottomRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
+
+  // Cargar tablas al cambiar base de datos
+  useEffect(() => {
+    if (selectedDatabase) {
+      fetchTables()
+    }
+  }, [selectedDatabase])
+
+  const fetchTables = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/schema', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token') || 'demo'}`,
+        }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        // Convertir tables object a array con metadata
+        const tablesArray = Object.entries(data.tables || {}).map(([name, info]) => ({
+          name,
+          columns: info.columns || [],
+          column_count: (info.columns || []).length,
+          row_count: info.row_count || 0
+        }))
+        setTables(tablesArray)
+      }
+    } catch (err) {
+      console.error('Error fetching tables:', err)
+    }
+  }
 
   const handleSend = () => {
     const text = input.trim()
@@ -41,7 +74,26 @@ export default function ChatContainer() {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+    <div className="flex-1 flex min-w-0 overflow-hidden">
+      {/* Sidebar - Table Explorer */}
+      {showSidebar && (
+        <TableExplorer 
+          tables={tables}
+          database={selectedDatabase}
+        />
+      )}
+
+      {/* Mobile Sidebar Toggle */}
+      <button
+        onClick={() => setShowSidebar(!showSidebar)}
+        className="lg:hidden absolute top-20 left-4 z-50 p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+        title="Toggle tables"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
       {/* Header */}
       <div className="px-6 py-4 border-b border-border shrink-0">
         <div className="space-y-3">
@@ -68,7 +120,11 @@ export default function ChatContainer() {
             <p className="text-sm text-muted-foreground mb-6">
               Haz preguntas en lenguaje natural sobre tu base de datos
             </p>
-            <SuggestedPrompts onSelect={(text) => setInput(text)} />
+            {/* Usar prompts dinámicos basados en tablas disponibles */}
+            <DynamicSuggestedPrompts 
+              tables={tables}
+              onSelect={(text) => setInput(text)} 
+            />
           </motion.div>
         ) : (
           <>
@@ -124,6 +180,7 @@ export default function ChatContainer() {
             )}
           </button>
         </div>
+      </div>
       </div>
     </div>
   )
