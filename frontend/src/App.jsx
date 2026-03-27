@@ -7,11 +7,13 @@ import ChatContainer from './components/chat/ChatContainer'
 import DataPreviewPanel from './components/data/DataPreviewPanel'
 import SecurityBadge from './components/security/SecurityBadge'
 import WelcomeScreen from './components/layout/WelcomeScreen'
+import DatabaseConfigPanel from './components/database/DatabaseConfigPanel'
+import AuditPanel from './components/security/AuditPanel'
 import { useAppStore } from './store/useAppStore'
 import { useBackendConnection } from './hooks/useBackend'
 
 function MainApp() {
-  const { selectedDatabase } = useAppStore()
+  const { selectedDatabase, activeView } = useAppStore()
   const { isConnected, loading, error, backendStatus } = useBackendConnection()
 
   useEffect(() => {
@@ -22,20 +24,42 @@ function MainApp() {
     }
   }, [isConnected, loading, error])
 
-  return (
-    <>
-      <AppLayout rightPanel={<DataPreviewPanel />}>
-        {isConnected ? (
+  const renderMainContent = () => {
+    switch (activeView) {
+      case 'audit':
+        return <AuditPanel />
+      case 'databases':
+        return (
+          <div className="flex-1 p-8 overflow-y-auto w-full">
+               <DatabaseConfigPanel />
+          </div>
+        )
+      case 'monitoring':
+        return (
+          <div className="flex-1 flex items-center justify-center p-8 text-center text-muted-foreground w-full">
+            El dashboard de Monitoreo aún está en construcción.
+          </div>
+        )
+      case 'dashboard':
+      default:
+        return isConnected ? (
           selectedDatabase ? <ChatContainer /> : <WelcomeScreen />
         ) : (
-          <div style={{ padding: '20px', textAlign: 'center' }}>
+          <div style={{ padding: '20px', textAlign: 'center', width: '100%' }}>
             {loading ? (
               <p>🔄 Conectando al backend...</p>
             ) : (
               <p style={{ color: 'red' }}>❌ Error: No se puede conectar al backend ({error})</p>
             )}
           </div>
-        )}
+        )
+    }
+  }
+
+  return (
+    <>
+      <AppLayout rightPanel={activeView === 'dashboard' ? <DataPreviewPanel /> : null}>
+        {renderMainContent()}
       </AppLayout>
       <SecurityBadge />
     </>

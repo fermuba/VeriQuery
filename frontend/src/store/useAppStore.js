@@ -5,6 +5,8 @@ const TEST_USER = 'test_user@veriquery.local'
 
 export const useAppStore = create((set, get) => ({
   // UI state
+  activeView: 'dashboard', // 'dashboard' | 'audit' | 'databases' | 'monitoring'
+  setActiveView: (view) => set({ activeView: view }),
   sidebarOpen: true,
   previewOpen: true,
   toggleSidebar: () => set(s => ({ sidebarOpen: !s.sidebarOpen })),
@@ -87,6 +89,31 @@ export const useAppStore = create((set, get) => ({
       }
       set(s => ({ userDatabases: [...s.userDatabases, data] }))
       return data
+    } catch (err) {
+      set({ databaseError: err.message })
+      throw err
+    } finally {
+      set({ loadingDatabases: false })
+    }
+  },
+
+  // Delete database configuration
+  deleteDatabase: async (dbName) => {
+    set({ loadingDatabases: true, databaseError: null })
+    try {
+      const response = await fetch(API.DATABASE_DELETE(dbName), {
+        method: 'DELETE',
+      })
+      if (!response.ok) throw new Error('Failed to delete database')
+      
+      const { selectedDatabase } = get()
+      if (selectedDatabase === dbName) {
+        set({ selectedDatabase: null, sessionId: null })
+      }
+      
+      const { fetchUserDatabases } = get()
+      await fetchUserDatabases()
+      return true
     } catch (err) {
       set({ databaseError: err.message })
       throw err

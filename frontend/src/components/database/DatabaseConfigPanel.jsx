@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Database, Shield, Trash2, Eye, EyeOff } from 'lucide-react'
 import { motion } from 'framer-motion'
 import DatabaseModal from '../database/DatabaseModal'
 import { API } from '../../config/endpoints'
+import { useAppStore } from '../../store/useAppStore'
 
 /**
  * DatabaseConfigPanel Component
@@ -11,23 +12,18 @@ import { API } from '../../config/endpoints'
  */
 
 export default function DatabaseConfigPanel() {
+  const { userDatabases, fetchUserDatabases, deleteDatabase } = useAppStore()
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [databases, setDatabases] = useState([
-    {
-      name: 'ContosoV210k',
-      db_type: 'sqlserver',
-      host: 'server.database.windows.net',
-      database: 'ContosoV210k',
-      is_readonly: true,
-      stored_in_keyvault: true,
-      last_verified: '2026-03-20T10:30:00'
-    }
-  ])
   const [selectedDb, setSelectedDb] = useState(null)
   const [showDetails, setShowDetails] = useState(false)
 
-  const handleAddDatabase = (config) => {
-    setDatabases(prev => [...prev, config])
+  useEffect(() => {
+    fetchUserDatabases()
+  }, [])
+
+  const handleAddDatabase = async (config) => {
+    setIsModalOpen(false)
+    await fetchUserDatabases()
   }
 
   const handleVerifyDatabase = async (dbName) => {
@@ -55,14 +51,7 @@ export default function DatabaseConfigPanel() {
     if (!confirm(`Delete database configuration "${dbName}"?`)) return
 
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/databases/credentials/${dbName}`,
-        { method: 'DELETE' }
-      )
-      
-      if (response.ok) {
-        setDatabases(prev => prev.filter(db => db.name !== dbName))
-      }
+      await deleteDatabase(dbName)
     } catch (err) {
       console.error('Delete failed:', err)
     }
@@ -103,7 +92,7 @@ export default function DatabaseConfigPanel() {
 
       {/* Database List */}
       <div className="grid gap-3">
-        {databases.length === 0 ? (
+        {userDatabases.length === 0 ? (
           <div className="bento-card p-8 text-center">
             <Database className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" strokeWidth={1.5} />
             <p className="text-foreground/60">No databases configured yet</p>
@@ -115,9 +104,9 @@ export default function DatabaseConfigPanel() {
             </button>
           </div>
         ) : (
-          databases.map((db, idx) => (
+          userDatabases.map((db, idx) => (
             <motion.div
-              key={db.name}
+              key={db.db_name || db.name}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.05 }}
@@ -132,14 +121,14 @@ export default function DatabaseConfigPanel() {
                 <div className="flex items-center gap-3 flex-1">
                   <span className="text-2xl">{getDbIcon(db.db_type)}</span>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-foreground">{db.name}</h3>
+                    <h3 className="font-semibold text-foreground">{db.db_name || db.name}</h3>
                     <p className="text-xs text-foreground/60">
                       {db.db_type.toUpperCase()} • {db.host}
                     </p>
                   </div>
                 </div>
 
-                {/* Status Badges */}
+                {/* Status Badges & Actions */}
                 <div className="flex items-center gap-2">
                   {db.is_readonly && (
                     <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium bg-success/10 text-success">
@@ -152,11 +141,22 @@ export default function DatabaseConfigPanel() {
                       🔐 Vault
                     </div>
                   )}
+                  {/* Delete Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDeleteDatabase(db.db_name || db.name)
+                    }}
+                    className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors ml-2"
+                    title="Delete database"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 
               {/* Details (Expandable) */}
-              {showDetails && selectedDb?.name === db.name && (
+              {showDetails && selectedDb && (selectedDb.db_name === db.db_name || selectedDb.name === db.name) && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
@@ -180,23 +180,12 @@ export default function DatabaseConfigPanel() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleVerifyDatabase(db.name)
+                        handleVerifyDatabase(db.db_name || db.name)
                       }}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium 
                         bg-muted hover:bg-muted/80 text-foreground transition-colors"
                     >
                       ✓ Verify
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDeleteDatabase(db.name)
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium 
-                        bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors"
-                    >
-                      <Trash2 className="w-3 h-3" strokeWidth={2} />
-                      Delete
                     </button>
                   </div>
                 </motion.div>

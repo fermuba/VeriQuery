@@ -74,6 +74,7 @@ class PostgreSQLConnector(DatabaseConnector):
         self.connection = None
         self._last_query_time: Optional[datetime] = None
         self._query_count = 0
+        self._max_reconnect_attempts = 3
         logger.info(f"PostgreSQLConnector initialized with database: {config.database}")
     
     def connect(self) -> bool:
@@ -117,6 +118,46 @@ class PostgreSQLConnector(DatabaseConnector):
             logger.error(f"Unexpected error during PostgreSQL connection: {str(e)}")
             self.is_connected = False
             raise PostgreSQLConnectorException(f"Unexpected connection error: {str(e)}")
+
+    def _ensure_connection(self) -> bool:
+        """
+        Verify the connection is alive and reconnect if necessary.
+        
+        Returns:
+            bool: True if a valid connection is available
+            
+        Raises:
+            PostgreSQLConnectionException: If reconnection fails
+        """
+        # Case 1: No connection object at all
+        if self.connection is None:
+            logger.warning("Connection object is None, attempting to reconnect...")
+            self.is_connected = False
+            return self.connect()
+        
+        # Case 2: Connection object exists but may be closed/stale
+        try:
+            # psycopg2's closed attribute: 0 = open, >0 = closed
+            if self.connection.closed:
+                logger.warning("Connection is closed, attempting to reconnect...")
+                self.connection = None
+                self.is_connected = False
+                return self.connect()
+            
+            # Lightweight liveness check
+            with self.connection.cursor() as cur:
+                cur.execute("SELECT 1")
+            return True
+            
+        except psycopg2.Error as e:
+            logger.warning(f"Connection check failed ({e}), attempting to reconnect...")
+            try:
+                self.connection.close()
+            except Exception:
+                pass
+            self.connection = None
+            self.is_connected = False
+            return self.connect()
     
     def disconnect(self) -> bool:
         """
@@ -145,11 +186,13 @@ class PostgreSQLConnector(DatabaseConnector):
         Returns:
             QueryResult: Result with data or error
         """
-        if not self.is_connected or not self.connection:
+        try:
+            self._ensure_connection()
+        except PostgreSQLConnectorException as e:
             return QueryResult(
                 success=False,
                 data=[],
-                error="Not connected to database",
+                error=f"Not connected to database: {str(e)}",
                 row_count=0,
                 execution_time_ms=0
             )
@@ -225,10 +268,7 @@ class PostgreSQLConnector(DatabaseConnector):
             Tuple[bool, str]: (success, message)
         """
         try:
-            if not self.is_connected or not self.connection:
-                success, msg = self.connect()
-                if not success:
-                    return (False, f"Connection failed: {msg}")
+            self._ensure_connection()
             
             with self.connection.cursor() as cursor:
                 cursor.execute("SELECT version()")
@@ -267,11 +307,13 @@ class PostgreSQLConnector(DatabaseConnector):
         Returns:
             QueryResult: Standardized result object
         """
-        if not self.is_connected or not self.connection:
+        try:
+            self._ensure_connection()
+        except PostgreSQLConnectorException as e:
             return QueryResult(
                 success=False,
                 data=[],
-                error="Not connected to database",
+                error=f"Not connected to database: {str(e)}",
                 row_count=0
             )
         
@@ -345,9 +387,7 @@ class PostgreSQLConnector(DatabaseConnector):
             Tuple[bool, str]: (is_healthy, message)
         """
         try:
-            if not self.is_connected or not self.connection:
-                # Attempt to reconnect
-                self.connect()
+            self._ensure_connection()
             
             with self.connection.cursor() as cursor:
                 cursor.execute("SELECT version()")
