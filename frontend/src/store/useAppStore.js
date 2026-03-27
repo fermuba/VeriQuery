@@ -5,12 +5,12 @@ const TEST_USER = 'test_user@veriquery.local'
 
 export const useAppStore = create((set, get) => ({
   // UI state
-  activeView: 'dashboard', // 'dashboard' | 'audit' | 'databases' | 'monitoring'
-  setActiveView: (view) => set({ activeView: view }),
   sidebarOpen: true,
   previewOpen: true,
+  currentView: 'chat', // 'chat' | 'audit' | 'database' | 'monitoring' | 'settings'
   toggleSidebar: () => set(s => ({ sidebarOpen: !s.sidebarOpen })),
   togglePreview: () => set(s => ({ previewOpen: !s.previewOpen })),
+  setCurrentView: (view) => set({ currentView: view }),
 
   // Connection
   connectionStatus: 'connected', // 'connected' | 'disconnected' | 'loading'
@@ -97,31 +97,6 @@ export const useAppStore = create((set, get) => ({
     }
   },
 
-  // Delete database configuration
-  deleteDatabase: async (dbName) => {
-    set({ loadingDatabases: true, databaseError: null })
-    try {
-      const response = await fetch(API.DATABASE_DELETE(dbName), {
-        method: 'DELETE',
-      })
-      if (!response.ok) throw new Error('Failed to delete database')
-      
-      const { selectedDatabase } = get()
-      if (selectedDatabase === dbName) {
-        set({ selectedDatabase: null, sessionId: null })
-      }
-      
-      const { fetchUserDatabases } = get()
-      await fetchUserDatabases()
-      return true
-    } catch (err) {
-      set({ databaseError: err.message })
-      throw err
-    } finally {
-      set({ loadingDatabases: false })
-    }
-  },
-
   // Select database and create session
   selectDatabase: async (dbName) => {
     set({ loadingDatabases: true, databaseError: null })
@@ -142,19 +117,6 @@ export const useAppStore = create((set, get) => ({
       throw err
     } finally {
       set({ loadingDatabases: false })
-    }
-  },
-
-  // Fetch schema (tables and columns) for a specific database
-  fetchDatabaseSchema: async (dbName) => {
-    try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/schema?db_name=${dbName}&session_id=none`)
-      if (!response.ok) throw new Error('Failed to fetch schema')
-      const data = await response.json()
-      return data.tables || {} // { "table_name": { "col_name": "type", ... } }
-    } catch (err) {
-      console.error(`Error fetching schema for ${dbName}:`, err)
-      return null
     }
   },
 

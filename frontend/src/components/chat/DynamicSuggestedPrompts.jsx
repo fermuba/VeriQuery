@@ -1,4 +1,4 @@
-import { Sparkles, TrendingUp, BarChart3, Users, Clock } from 'lucide-react'
+import { Sparkles, TrendingUp, BarChart3, Users, Clock, Lightbulb } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 /**
@@ -81,8 +81,9 @@ export default function DynamicSuggestedPrompts({ tables = [], onSelect }) {
 
   return (
     <div className="space-y-2">
-      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
-        💡 Preguntas que puedes hacer:
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
+        <Lightbulb className="w-3.5 h-3.5 text-foreground" strokeWidth={2.5} />
+        Preguntas que puedes hacer:
       </div>
       
       <div className="flex flex-wrap gap-2">

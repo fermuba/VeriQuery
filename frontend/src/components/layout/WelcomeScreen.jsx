@@ -1,11 +1,11 @@
-import { Database, Plus, ArrowRight, Trash2 } from 'lucide-react'
+import { Database, Plus, ArrowRight } from 'lucide-react'
 import { useAppStore } from '../../store/useAppStore'
 import DatabaseModal from '../database/DatabaseModal'
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 
 export default function WelcomeScreen() {
-  const { userDatabases, selectedDatabase, fetchUserDatabases, selectDatabase, deleteDatabase } = useAppStore()
+  const { userDatabases, selectedDatabase, fetchUserDatabases, selectDatabase } = useAppStore()
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   useEffect(() => {
@@ -25,17 +25,6 @@ export default function WelcomeScreen() {
     // Just close the modal and refresh the list
     setIsModalOpen(false)
     await fetchUserDatabases()
-  }
-
-  const handleDeleteDatabase = async (e, dbName) => {
-    e.stopPropagation()
-    if (window.confirm(`Are you sure you want to delete the configuration for "${dbName}"?`)) {
-      try {
-        await deleteDatabase(dbName)
-      } catch (err) {
-        console.error('Error deleting database:', err)
-      }
-    }
   }
 
   return (
@@ -63,33 +52,23 @@ export default function WelcomeScreen() {
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Available Databases</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {userDatabases.map((db, idx) => (
-                <motion.div
+                <motion.button
                   key={db.db_name}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.1 }}
                   onClick={() => handleSelectDatabase(db.db_name)}
-                  className="p-4 rounded-xl border border-border glass-surface hover:border-primary/50 hover:bg-primary/5 transition-all duration-200 text-left group cursor-pointer"
+                  className="p-4 rounded-xl border border-border glass-surface hover:border-primary/50 hover:bg-primary/5 transition-all duration-200 text-left group"
                 >
                   <div className="flex items-start justify-between mb-2">
                     <span className="text-2xl">
                       {db.db_type === 'postgresql' ? '🐘' : db.db_type === 'sqlserver' ? '🔵' : '📊'}
                     </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteDatabase(e, db.db_name)}
-                        className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors z-10 relative"
-                        title="Delete database"
-                      >
-                        <Trash2 className="w-5 h-5" strokeWidth={2} />
-                      </button>
-                      <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors opacity-0 group-hover:opacity-100" strokeWidth={2} />
-                    </div>
+                    <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors opacity-0 group-hover:opacity-100" strokeWidth={2} />
                   </div>
                   <p className="font-semibold text-foreground">{db.db_name}</p>
                   <p className="text-xs text-muted-foreground mt-1">{db.host}</p>
-                </motion.div>
+                </motion.button>
               ))}
             </div>
           </div>

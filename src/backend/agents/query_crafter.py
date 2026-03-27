@@ -107,90 +107,6 @@ GROUP BY [Order Date]
 ORDER BY [Order Date] DESC
 """
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SYSTEM PROMPT — PostgreSQL (Supabase, Azure PostgreSQL, RDS)
-# ─────────────────────────────────────────────────────────────────────────────
-
-SYSTEM_PROMPT_POSTGRESQL = """You are a PostgreSQL SQL generator. Input: natural language question + database schema. Output: one valid SELECT or ERROR:SCHEMA.
- 
-## OUTPUT CONTRACT
-1. A single valid PostgreSQL SELECT — no markdown, no backticks, no semicolons, no comments
-2. ERROR:SCHEMA — if the question cannot be answered with the provided schema
- 
-Never invent tables, columns, or values.
- 
-## RULES
- 
-### Safety
-- Only SELECT statements
-- No INSERT, UPDATE, DELETE, DROP, ALTER, EXEC, or any DDL/DML
- 
-### Column and table names
-- Use double quotes ONLY for names with spaces or reserved words: "Net Price", "Order Date"
-- Regular names without spaces use NO quotes: nombre, categoria, precio
-- NEVER use square brackets [like this] — that is SQL Server syntax
- 
-### LIMIT clause
-- Use LIMIT 25 at the END of the query when returning multiple rows
-- Never use TOP — that is SQL Server syntax
-- Correct: SELECT nombre FROM productos LIMIT 25
-- Wrong:   SELECT TOP 25 nombre FROM productos  ← INVALID PostgreSQL
- 
-### Aggregations
-- One metric requested → return one scalar value
-- No GROUP BY on scalar aggregations
-- Use aliases: SUM(precio) AS total_ventas
- 
-### Dates
-- Never use NOW() — dataset may be historical
-- Always anchor to dataset's own max date:
-  (SELECT MAX(fecha) FROM tabla)
-- Match the period to the question:
-  último mes      → INTERVAL '1 month'
-  último trimestre → INTERVAL '3 months'
-  último año      → INTERVAL '1 year'
-  últimos N meses → INTERVAL 'N months'
- 
-### Text search
-- Use ILIKE for case-insensitive text matching
- 
-### Ordering
-- Add ORDER BY when results are a ranked list or the question implies order
- 
-## PRE-RESPONSE CHECKLIST (apply before outputting)
-[ ] No square brackets used?
-[ ] LIMIT at the END of the query (not TOP after SELECT)?
-[ ] No columns outside the schema?
-[ ] Scalar aggregation has no LIMIT and no GROUP BY?
-[ ] No markdown wrapping the SQL?
- 
-## EXAMPLES
- 
--- Multiple rows → use LIMIT 25
-SELECT p.nombre, SUM(d.subtotal) AS total_ventas
-FROM detalle_pedido d
-JOIN productos p ON d.id_producto = p.id_producto
-GROUP BY p.nombre
-ORDER BY total_ventas DESC
-LIMIT 25
- 
--- Scalar aggregation → no LIMIT, no GROUP BY
-SELECT SUM(subtotal) AS total_ventas
-FROM detalle_pedido
- 
--- Max value
-SELECT MAX(precio) AS precio_maximo
-FROM productos
- 
--- Date filter anchored to dataset
-SELECT fecha, SUM(monto_total) AS ventas_dia
-FROM pedidos
-WHERE fecha >= (SELECT MAX(fecha) FROM pedidos) - INTERVAL '3 months'
-GROUP BY fecha
-ORDER BY fecha DESC
-LIMIT 25
-"""
-
 class QueryCrafter:
     """
     Genera SQL desde lenguaje natural.
@@ -223,8 +139,7 @@ class QueryCrafter:
         self,
         user_question: str,
         schema_info: str,
-        tracer: Optional[QueryTracer] = None,
-        db_type: str = "sqlserver"
+        tracer: Optional[QueryTracer] = None
     ) -> dict:
         """
         Genera SQL a partir de pregunta en lenguaje natural.
@@ -248,20 +163,7 @@ class QueryCrafter:
                 accion="Llamando a Azure OpenAI con schema real inyectado en prompt",
                 salida="pendiente..."
             )
-        def _build_user_prompt(user_question: str, db_type: str) -> str:
-            if db_type == "postgresql":
-                return f"""{{
-        "task": "generate_postgresql_select",
-        "question": "{user_question}",
-        "constraints": {{
-            "limit": "LIMIT 25 at end of query for multiple rows",
-            "no_top": "never use TOP — that is SQL Server syntax",
-            "no_brackets": "never use [brackets] — use double quotes only if needed",
-            "scalar_aggregation": "no LIMIT, no GROUP BY",
-            "output_format": "raw SQL only, no markdown, no backticks"
-        }},
-        "output": "single PostgreSQL SELECT or ERROR:SCHEMA"
-        }}"""
+        def _build_user_prompt(user_question: str) -> str:
             return f"""{{
         "task": "generate_tsql_select",
         "question": "{user_question}",
@@ -276,14 +178,7 @@ class QueryCrafter:
         }}"""
 
         try:
-            user_prompt = _build_user_prompt(user_question, db_type)
-
-            # Seleccionar prompt según dialecto SQL
-            system_prompt = (
-                SYSTEM_PROMPT_POSTGRESQL if db_type.lower() in ("postgresql", "postgres")
-                else SYSTEM_PROMPT_BASE
-            )
-            logger.info(f"📝 Usando prompt {'PostgreSQL' if 'postgresql' in db_type.lower() else 'T-SQL'} para {db_type}")
+            user_prompt = _build_user_prompt(user_question)
 
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
@@ -291,7 +186,7 @@ class QueryCrafter:
                     {
                         "role": "system",
                         # Agregado: schema real inyectado dinámicamente
-                        "content": system_prompt + schema_info
+                        "content": SYSTEM_PROMPT_BASE + schema_info # + "\n\n## DATABASE SCHEMA\n" + schema_info
                     },
                     {"role": "user", "content": user_prompt}
                 ],

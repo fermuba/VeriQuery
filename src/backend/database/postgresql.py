@@ -74,7 +74,6 @@ class PostgreSQLConnector(DatabaseConnector):
         self.connection = None
         self._last_query_time: Optional[datetime] = None
         self._query_count = 0
-        self._max_reconnect_attempts = 3
         logger.info(f"PostgreSQLConnector initialized with database: {config.database}")
     
     def connect(self) -> bool:
@@ -118,46 +117,6 @@ class PostgreSQLConnector(DatabaseConnector):
             logger.error(f"Unexpected error during PostgreSQL connection: {str(e)}")
             self.is_connected = False
             raise PostgreSQLConnectorException(f"Unexpected connection error: {str(e)}")
-
-    def _ensure_connection(self) -> bool:
-        """
-        Verify the connection is alive and reconnect if necessary.
-        
-        Returns:
-            bool: True if a valid connection is available
-            
-        Raises:
-            PostgreSQLConnectionException: If reconnection fails
-        """
-        # Case 1: No connection object at all
-        if self.connection is None:
-            logger.warning("Connection object is None, attempting to reconnect...")
-            self.is_connected = False
-            return self.connect()
-        
-        # Case 2: Connection object exists but may be closed/stale
-        try:
-            # psycopg2's closed attribute: 0 = open, >0 = closed
-            if self.connection.closed:
-                logger.warning("Connection is closed, attempting to reconnect...")
-                self.connection = None
-                self.is_connected = False
-                return self.connect()
-            
-            # Lightweight liveness check
-            with self.connection.cursor() as cur:
-                cur.execute("SELECT 1")
-            return True
-            
-        except psycopg2.Error as e:
-            logger.warning(f"Connection check failed ({e}), attempting to reconnect...")
-            try:
-                self.connection.close()
-            except Exception:
-                pass
-            self.connection = None
-            self.is_connected = False
-            return self.connect()
     
     def disconnect(self) -> bool:
         """
@@ -186,13 +145,11 @@ class PostgreSQLConnector(DatabaseConnector):
         Returns:
             QueryResult: Result with data or error
         """
-        try:
-            self._ensure_connection()
-        except PostgreSQLConnectorException as e:
+        if not self.is_connected or not self.connection:
             return QueryResult(
                 success=False,
                 data=[],
-                error=f"Not connected to database: {str(e)}",
+                error="Not connected to database",
                 row_count=0,
                 execution_time_ms=0
             )
@@ -228,10 +185,12 @@ class PostgreSQLConnector(DatabaseConnector):
                 success=True,
                 data=data,
                 error=None,
-                row_count=row_count
+                row_count=row_count,
+                execution_time_ms=execution_time
             )
             
         except psycopg2.Error as e:
+            execution_time = (datetime.now() - start_time).total_seconds() * 1000
             error_msg = str(e)
             logger.error(f"PostgreSQL query error: {error_msg}")
             
@@ -239,10 +198,12 @@ class PostgreSQLConnector(DatabaseConnector):
                 success=False,
                 data=[],
                 error=error_msg,
-                row_count=0
+                row_count=0,
+                execution_time_ms=execution_time
             )
         
         except Exception as e:
+            execution_time = (datetime.now() - start_time).total_seconds() * 1000
             error_msg = f"Unexpected error: {str(e)}"
             logger.error(error_msg)
             
@@ -250,7 +211,8 @@ class PostgreSQLConnector(DatabaseConnector):
                 success=False,
                 data=[],
                 error=error_msg,
-                row_count=0
+                row_count=0,
+                execution_time_ms=execution_time
             )
         
         finally:
@@ -268,7 +230,10 @@ class PostgreSQLConnector(DatabaseConnector):
             Tuple[bool, str]: (success, message)
         """
         try:
-            self._ensure_connection()
+            if not self.is_connected or not self.connection:
+                success, msg = self.connect()
+                if not success:
+                    return (False, f"Connection failed: {msg}")
             
             with self.connection.cursor() as cursor:
                 cursor.execute("SELECT version()")
@@ -295,105 +260,3 @@ class PostgreSQLConnector(DatabaseConnector):
             "queries_executed": self._query_count,
             "last_query_time": self._last_query_time.isoformat() if self._last_query_time else None
         }
-
-    def execute_query_with_params(self, sql: str, params: Dict[str, Any]) -> QueryResult:
-        """
-        Execute a parameterized SELECT query against PostgreSQL.
-        
-        Args:
-            sql: SQL query with %s or %(name)s placeholders
-            params: Dictionary of parameter names and values
-            
-        Returns:
-            QueryResult: Standardized result object
-        """
-        try:
-            self._ensure_connection()
-        except PostgreSQLConnectorException as e:
-            return QueryResult(
-                success=False,
-                data=[],
-                error=f"Not connected to database: {str(e)}",
-                row_count=0
-            )
-        
-        start_time = datetime.now()
-        cursor = None
-        
-        try:
-            cursor = self.connection.cursor(cursor_factory=psycopg2.extras.DictCursor)
-            
-            logger.debug(f"Executing parameterized PostgreSQL query: {sql[:100]}...")
-            cursor.execute(sql, params)
-            
-            if sql.strip().upper().startswith('SELECT'):
-                rows = cursor.fetchall()
-                data = [dict(row) for row in rows]
-                row_count = len(data)
-            else:
-                self.connection.commit()
-                row_count = cursor.rowcount
-                data = []
-            
-            execution_time = (datetime.now() - start_time).total_seconds() * 1000
-            self._query_count += 1
-            self._last_query_time = datetime.now()
-            
-            logger.info(f"Parameterized query executed: {row_count} rows in {execution_time:.3f}ms")
-            
-            return QueryResult(
-                success=True,
-                data=data,
-                error=None,
-                row_count=row_count
-            )
-            
-        except psycopg2.Error as e:
-            execution_time = (datetime.now() - start_time).total_seconds() * 1000
-            error_msg = str(e)
-            logger.error(f"PostgreSQL parameterized query error: {error_msg}")
-            
-            return QueryResult(
-                success=False,
-                data=[],
-                error=error_msg,
-                row_count=0
-            )
-        
-        except Exception as e:
-            execution_time = (datetime.now() - start_time).total_seconds() * 1000
-            error_msg = f"Unexpected error: {str(e)}"
-            logger.error(error_msg)
-            
-            return QueryResult(
-                success=False,
-                data=[],
-                error=error_msg,
-                row_count=0
-            )
-        
-        finally:
-            if cursor:
-                try:
-                    cursor.close()
-                except:
-                    pass
-
-    def health_check(self) -> Tuple[bool, str]:
-        """
-        Perform a health check on the PostgreSQL connection.
-        
-        Returns:
-            Tuple[bool, str]: (is_healthy, message)
-        """
-        try:
-            self._ensure_connection()
-            
-            with self.connection.cursor() as cursor:
-                cursor.execute("SELECT version()")
-                version = cursor.fetchone()[0]
-                return (True, f"Connected to PostgreSQL: {version}")
-            
-        except Exception as e:
-            return (False, f"Health check failed: {str(e)}")
-

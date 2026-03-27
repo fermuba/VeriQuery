@@ -49,13 +49,15 @@ export default function ChatContainer() {
       })
       if (response.ok) {
         const data = await response.json()
-        // Convertir tables object a array con metadata
-        const tablesArray = Object.entries(data.tables || {}).map(([name, info]) => ({
-          name,
-          columns: info.columns || [],
-          column_count: (info.columns || []).length,
-          row_count: info.row_count || 0
-        }))
+        // Convertir tables object a array con metadata (soportando tanto array como object legacy)
+        const tablesArray = Array.isArray(data.tables)
+          ? data.tables
+          : Object.entries(data.tables || {}).map(([name, info]) => ({
+              name,
+              columns: info.columns || [],
+              column_count: (info.columns || []).length,
+              row_count: info.row_count || 0
+            }))
         setTables(tablesArray)
         console.info(`✅ Loaded ${tablesArray.length} tables for database: ${dbName}`)
       }

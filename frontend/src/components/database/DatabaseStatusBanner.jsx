@@ -40,10 +40,10 @@ export default function DatabaseStatusBanner() {
     }
 
     if (isReady) {
-      // Calcular total de tablas y registros desde el nuevo formato
-      const tables = schema?.tables || {}
-      const tableCount = Object.keys(tables).length
-      const totalRecords = Object.values(tables).reduce((sum, table) => sum + (table.row_count || 0), 0)
+      // Calcular total de tablas y registros desde el nuevo formato de Array
+      const tables = schema?.tables || []
+      const tableCount = tables.length
+      const totalRecords = tables.reduce((sum, table) => sum + (table.row_count || 0), 0)
       
       return {
         icon: CheckCircle,

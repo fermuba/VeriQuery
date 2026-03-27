@@ -78,16 +78,17 @@ async def scan_schema(request: SchemaScanRequest, db_name: Optional[str] = None)
             logger.error(f"Schema scan error: {error}")
             raise HTTPException(status_code=400, detail=error)
             
-        # Convertir al formato que espera el frontend
-        tables_dict = {}
+        # Convertir al formato de Array unificado para el frontend
+        tables_list = []
         for table_name, data in schema.items():
-            # Extraer solo los nombres de columna (son dicts con "name", "type", etc.)
-            column_names = [col["name"] if isinstance(col, dict) else col for col in data["columns"]]
-            tables_dict[table_name] = {
-                "columns": column_names,
-                "row_count": data["row_count"],
-                "column_count": len(column_names)
-            }
+            # Las columnas ya vienen como objetos con name, type, etc.
+            tables_list.append({
+                "name": table_name,
+                "columns": data["columns"],
+                "row_count": data.get("row_count", 0),
+                "column_count": len(data["columns"]),
+                "sample_data": data.get("sample_data", [])
+            })
         
         # IMPORTANTE: Sincronizar con nl2sql_generator para que tenga el schema actualizado
         if nl2sql_generator:
@@ -113,8 +114,8 @@ async def scan_schema(request: SchemaScanRequest, db_name: Optional[str] = None)
         
         logger.info(f"✓ Schema scan successful for database: {database_name}")
         return {
-            "tables": tables_dict,
-            "table_count": len(tables_dict),
+            "tables": tables_list,
+            "table_count": len(tables_list),
             "database_name": database_name,
             "error": None,
         }
@@ -155,23 +156,21 @@ async def get_cached_schema(database_name: Optional[str] = None):
             logger.error(f"Schema scan error for {database_name or 'active'}: {error}")
             raise HTTPException(status_code=400, detail=error)
         
-        # STEP 4: Convert to frontend format
-        tables_dict = {}
+        # STEP 4: Convert to unified Array format
+        tables_list = []
         for table_name, data in schema.items():
-            # Extract just column names (columns are dicts with "name", "type", etc.)
-            column_names = [col["name"] if isinstance(col, dict) else col for col in data["columns"]]
-            tables_dict[table_name] = {
-                "columns": column_names,
+            tables_list.append({
+                "name": table_name,
+                "columns": data["columns"],
                 "row_count": data.get("row_count", 0),
-                "column_count": len(column_names)
-            }
+                "column_count": len(data["columns"]),
+                "sample_data": data.get("sample_data", [])
+            })
         
         active_db_name = db_connector.active_database.name if db_connector.active_database else "unknown"
-        logger.info(f"✅ Schema retrieved: {len(tables_dict)} tables from {active_db_name}")
-        
         return {
-            "tables": tables_dict,
-            "table_count": len(tables_dict),
+            "tables": tables_list,
+            "table_count": len(tables_list),
             "database_name": active_db_name,
             "error": None,
         }

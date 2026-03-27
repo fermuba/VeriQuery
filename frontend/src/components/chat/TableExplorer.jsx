@@ -79,9 +79,9 @@ export default function TableExplorer({ tables = [], database = '' }) {
               {table.columns && table.columns.length > 0 && (
                 <div className="mt-2 ml-6 space-y-1 text-xs text-muted-foreground max-h-24 overflow-y-auto">
                   {table.columns.slice(0, 5).map((col) => (
-                    <div key={col} className="truncate">
+                    <div key={col.name || col} className="truncate">
                       <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
-                        {col}
+                        {col.name || col}
                       </code>
                     </div>
                   ))}

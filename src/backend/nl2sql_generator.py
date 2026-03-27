@@ -308,8 +308,7 @@ class NL2SQLGenerator:
         crafter_result = self.query_crafter.generate_sql(
             user_question=enriched_query,
             schema_info=schema_info,
-            tracer=tracer,
-            db_type=self._active_db_type or "sqlserver"
+            tracer=tracer
         )
 
         if "error" in crafter_result and not crafter_result.get("sql"):

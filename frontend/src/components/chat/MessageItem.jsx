@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, Code, BookOpen, BarChart3, AlertCircle } from 'lucide-react'
+import { ChevronDown, Code, BookOpen, Table as TableIcon, AlertCircle } from 'lucide-react'
 import ConfidenceBadge from './ConfidenceBadge'
 import ClarificationOptions from './ClarificationOptions'
 import ChartRenderer from '../charts/ChartRenderer'
@@ -86,22 +86,10 @@ export default function MessageItem({ message }) {
 
         {data && Array.isArray(data) && data.length > 0 && (
           <div className="rounded-lg overflow-hidden">
-            <button
-              onClick={() => setDataOpen(!dataOpen)}
-              className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-1 py-1.5"
-            >
-              <BarChart3 className="w-4 h-4 text-gray-600" strokeWidth={1.5} />
-              Datos ({data.length} registros)
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${dataOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {dataOpen && (
-              <div className="mt-2">
-                <ChartRenderer 
-                  data={data}
-                  title={null}
-                />
-              </div>
-            )}
+            <ChartRenderer 
+              data={data}
+              title={`Datos (${data.length} registros)`}
+            />
           </div>
         )}
       </div>

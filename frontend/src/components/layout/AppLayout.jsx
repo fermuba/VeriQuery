@@ -4,14 +4,15 @@ import { LayoutDashboard, FileSearch, Database, Settings, Shield, Activity, Pane
 import { useState } from 'react'
 
 const NAV_ITEMS = [
-  { id: 'dashboard',  icon: LayoutDashboard, label: 'Panel Principal' },
+  { id: 'chat',       icon: LayoutDashboard, label: 'Panel Principal' },
   { id: 'audit',      icon: FileSearch,      label: 'Registros de Auditoría' },
-  { id: 'databases',  icon: Database,        label: 'Base de Datos' },
+  { id: 'database',   icon: Database,        label: 'Base de Datos' },
   { id: 'monitoring', icon: Activity,        label: 'Monitoreo' },
+  { id: 'settings',   icon: Settings,        label: 'Configuración' },
 ]
 
 function Sidebar() {
-  const { activeView, setActiveView, selectedDatabase } = useAppStore()
+  const { selectedDatabase, currentView, setCurrentView } = useAppStore()
   
   return (
     <aside className="w-[4.5rem] hover:w-60 transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] border-r border-border glass-surface flex flex-col py-5 group shrink-0 overflow-hidden z-10">
@@ -27,9 +28,9 @@ function Sidebar() {
         {NAV_ITEMS.map(({ id, icon: Icon, label }) => (
           <button
             key={id}
-            onClick={() => setActiveView(id)}
+            onClick={() => setCurrentView(id)}
             className={`flex items-center gap-3 px-3 py-3 rounded-md transition-all duration-200 text-left whitespace-nowrap flex-shrink-0 ${
-              activeView === id
+              currentView === id
                 ? 'bg-slate-800/10 text-slate-800'
                 : 'text-slate-600 hover:bg-muted hover:translate-x-0.5'
             }`}
