@@ -19,35 +19,32 @@ import {
   Legend
 } from 'recharts'
 
-// Paleta de colores sobria y coherente con el diseño
+// Paleta de colores monocromática (escala de grises)
 const PALETTE = {
-  primary: '#37474f',      // Gris oscuro
-  secondary: '#546e7a',    // Gris medio
-  tertiary: '#78909c',     // Gris claro
-  accent: '#90caf9',       // Azul claro
-  success: '#66bb6a',      // Verde
-  warning: '#ffa726',      // Naranja
-  danger: '#ef5350',       // Rojo
+  primary: '#1e293b',      // slate-800
+  secondary: '#334155',    // slate-700
+  tertiary: '#475569',     // slate-600
+  accent: '#64748b',       // slate-500
+  success: '#94a3b8',      // slate-400 (repurposed for grayscale)
+  warning: '#cbd5e1',      // slate-300 (repurposed for grayscale)
+  danger: '#e2e8f0',       // slate-200 (repurposed for grayscale)
 }
 
-// Array de colores para gráficos con múltiples series
+// Array de colores escala de grises para gráficos con múltiples series
 const COLORS_ARRAY = [
-  '#37474f', '#546e7a', '#78909c', '#90caf9',
-  '#66bb6a', '#ffa726', '#ef5350', '#ab47bc'
+  '#1e293b', '#334155', '#475569', '#64748b',
+  '#94a3b8', '#cbd5e1', '#e2e8f0', '#f1f5f9'
 ]
 
-/**
- * CustomTooltip - Tooltip personalizado para todos los gráficos
- */
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
   
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-lg">
-      <p className="text-xs font-semibold text-gray-900 mb-1">{label}</p>
+    <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-xl p-3 shadow-lg">
+      <p className="text-xs font-bold text-slate-800 mb-1">{label}</p>
       {payload.map((entry, index) => (
-        <p key={index} className="text-xs text-gray-700">
-          <span style={{ color: entry.color }}>●</span> {entry.name}: <strong>{entry.value.toLocaleString?.() || entry.value}</strong>
+        <p key={index} className="text-sm font-medium text-slate-600 flex items-center gap-2">
+          <span style={{ color: entry.color }}>●</span> {entry.name}: <strong className="text-slate-900">{entry.value.toLocaleString?.() || entry.value}</strong>
         </p>
       ))}
     </div>
@@ -72,15 +69,21 @@ export function SimpleBarChart({ data, xKey, yKey, title, height = 300, color = 
       {title && <h3 className="text-sm font-semibold mb-4 text-foreground">{title}</h3>}
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 40 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
           <XAxis 
             dataKey={xKey} 
-            tick={{ fontSize: 12, fill: '#9e9e9e' }}
+            tick={{ fontSize: 12, fill: '#64748b', fontWeight: 500 }}
             angle={-45}
             textAnchor="end"
             height={80}
+            axisLine={{ stroke: '#cbd5e1' }}
+            tickLine={false}
           />
-          <YAxis tick={{ fontSize: 12, fill: '#9e9e9e' }} />
+          <YAxis 
+            tick={{ fontSize: 12, fill: '#64748b', fontWeight: 500 }} 
+            axisLine={{ stroke: '#cbd5e1' }}
+            tickLine={false}
+          />
           <Tooltip content={<CustomTooltip />} />
           {isMultiple && <Legend />}
           {isMultiple ? (
@@ -114,15 +117,21 @@ export function SimpleLineChart({ data, xKey, yKey, title, height = 300, color =
       {title && <h3 className="text-sm font-semibold mb-4 text-foreground">{title}</h3>}
       <ResponsiveContainer width="100%" height={height}>
         <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 40 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
           <XAxis 
             dataKey={xKey}
-            tick={{ fontSize: 12, fill: '#9e9e9e' }}
+            tick={{ fontSize: 12, fill: '#64748b', fontWeight: 500 }}
             angle={-45}
             textAnchor="end"
             height={80}
+            axisLine={{ stroke: '#cbd5e1' }}
+            tickLine={false}
           />
-          <YAxis tick={{ fontSize: 12, fill: '#9e9e9e' }} />
+          <YAxis 
+            tick={{ fontSize: 12, fill: '#64748b', fontWeight: 500 }}
+            axisLine={{ stroke: '#cbd5e1' }}
+            tickLine={false}
+          />
           <Tooltip content={<CustomTooltip />} />
           {isMultiple && <Legend />}
           {isMultiple ? (
@@ -186,15 +195,21 @@ export function SimpleAreaChart({ data, xKey, yKey, title, height = 300, color =
               </linearGradient>
             )}
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
           <XAxis 
             dataKey={xKey}
-            tick={{ fontSize: 12, fill: '#9e9e9e' }}
+            tick={{ fontSize: 12, fill: '#64748b', fontWeight: 500 }}
             angle={-45}
             textAnchor="end"
             height={80}
+            axisLine={{ stroke: '#cbd5e1' }}
+            tickLine={false}
           />
-          <YAxis tick={{ fontSize: 12, fill: '#9e9e9e' }} />
+          <YAxis 
+            tick={{ fontSize: 12, fill: '#64748b', fontWeight: 500 }} 
+            axisLine={{ stroke: '#cbd5e1' }}
+            tickLine={false}
+          />
           <Tooltip content={<CustomTooltip />} />
           {isMultiple && <Legend />}
           {isMultiple ? (

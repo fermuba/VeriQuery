@@ -19,15 +19,15 @@ const getEventIcon = (type) => {
 
 const getEventColor = (type, status) => {
   if (type === 'error' || status === 'failed') {
-    return 'bg-destructive/10 border-destructive/20 text-destructive'
+    return 'bg-red-50 border-red-200 text-red-900 shadow-sm border'
   }
   if (status === 'success') {
-    return 'bg-green-50/50 border-green-200/50 text-green-700'
+    return 'bg-slate-100 border-slate-300 text-slate-900 shadow-sm border'
   }
   if (status === 'processing') {
-    return 'bg-blue-50/50 border-blue-200/50 text-blue-700'
+    return 'bg-white border-slate-300 border-dashed text-slate-800 shadow-sm border animate-pulse'
   }
-  return 'bg-muted/50 border-border/50 text-muted-foreground'
+  return 'bg-slate-50 border-slate-200 text-slate-600 shadow-sm border'
 }
 
 export default function AuditLog() {
@@ -64,8 +64,8 @@ export default function AuditLog() {
             </div>
 
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium truncate">
-                {event.type === 'query' ? '🔍 Query' : event.type === 'database' ? '📊 BD' : '⚠️ Error'}
+              <p className="text-xs font-bold truncate">
+                {event.type === 'query' ? 'Consulta (Query)' : event.type === 'database' ? 'Actualización BD' : 'Error'}
               </p>
               {event.text && (
                 <p className="text-xs line-clamp-2 opacity-75 mt-0.5">
