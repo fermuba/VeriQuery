@@ -105,6 +105,10 @@ async def lifespan(app: FastAPI):
     
     logger.info("=" * 70)
     logger.info("VERIQUERY - STARTING UP")
+    logger.info(f"CWD: {os.getcwd()}")
+    logger.info(f"PYTHONPATH: {sys.path}")
+    logger.info(f"Files in root: {os.listdir('.') if os.path.exists('.') else 'None'}")
+    logger.info(f"Files in src: {os.listdir('src') if os.path.exists('src') else 'None'}")
     logger.info("=" * 70)
     
     try:
