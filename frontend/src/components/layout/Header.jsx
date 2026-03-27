@@ -1,4 +1,5 @@
 import { Shield, ShieldCheck, LogOut, User } from 'lucide-react'
+import logo from '../../assets/logo.png'
 import { useAuth } from '../../auth/useAuth'
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
@@ -16,8 +17,8 @@ export default function Header() {
   return (
     <header className="h-20 glass-surface border-b border-border flex items-center justify-between px-8 shrink-0 z-40">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-md bg-slate-800 flex items-center justify-center">
-          <Shield className="w-6 h-6 text-white" strokeWidth={1.5} />
+        <div className="w-11 h-11 bg-slate-900 rounded-lg flex items-center justify-center overflow-hidden shadow-sm">
+          <img src={logo} alt="VeriQuery" className="w-7 h-7 object-contain" />
         </div>
         <div>
           <h1 className="text-lg font-bold text-slate-800 tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>VeriQuery</h1>

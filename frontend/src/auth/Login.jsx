@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "./useAuth";
 import { Shield, ArrowRight, Lock, CheckCircle } from "lucide-react";
+import logo from "../assets/logo.png";
 
 export const Login = () => {
   const navigate = useNavigate();
@@ -77,7 +78,7 @@ export const Login = () => {
           <div className="flex justify-center">
             <div className="relative">
               <div className="absolute inset-0 bg-slate-700/10 blur-lg rounded-full"></div>
-              <Shield className="w-16 h-16 text-slate-700 relative" strokeWidth={1.5} />
+              <img src={logo} alt="VeriQuery Logo" className="w-20 h-20 object-contain relative transition-transform hover:scale-105 duration-300" />
             </div>
           </div>
           <div>
@@ -104,14 +105,14 @@ export const Login = () => {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 w-full max-w-md">
+      <div className="relative z-10 w-full max-w-md pt-10">
         {/* Logo */}
         <div className="text-center mb-12">
           <div className="flex justify-center mb-6">
             <div className="relative">
               <div className="absolute inset-0 bg-slate-700/10 blur-lg rounded-lg"></div>
-              <div className="relative bg-white p-4 rounded-lg border border-slate-300 shadow-sm">
-                <Shield className="w-10 h-10 text-slate-700" strokeWidth={1.5} />
+              <div className="relative bg-slate-900 p-4 rounded-2xl shadow-lg overflow-hidden flex items-center justify-center">
+                <img src={logo} alt="VeriQuery" className="w-16 h-16 object-contain" />
               </div>
             </div>
           </div>

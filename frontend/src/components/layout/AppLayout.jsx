@@ -2,6 +2,7 @@ import Header from './Header'
 import { useAppStore } from '../../store/useAppStore'
 import { LayoutDashboard, FileSearch, Database, Settings, Shield, Activity, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { useState } from 'react'
+import logo from '../../assets/logo.png'
 
 const NAV_ITEMS = [
   { id: 'chat',       icon: LayoutDashboard, label: 'Panel Principal' },
@@ -16,12 +17,7 @@ function Sidebar() {
   
   return (
     <aside className="w-[4.5rem] hover:w-60 transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] border-r border-border glass-surface flex flex-col py-5 group shrink-0 overflow-hidden z-10">
-      {/* Logo */}
-      <div className="px-2 mb-6">
-        <div className="w-11 h-11 rounded-lg bg-slate-800/10 flex items-center justify-center">
-          <Shield className="w-6 h-6 text-slate-800" strokeWidth={1.5} />
-        </div>
-      </div>
+
 
       {/* Main Navigation */}
       <nav className="flex flex-col gap-1.5 px-2 flex-1 min-w-0">
