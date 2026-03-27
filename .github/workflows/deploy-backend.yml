@@ -42,6 +42,6 @@ jobs:
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
-          app-name: 'veriquery-api-c7emfxhhf3h9hndy' # App name in Azure Portal
+          app-name: 'veriquery-api' # Name from the msdeploySite in the publish profile
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: release.zip
