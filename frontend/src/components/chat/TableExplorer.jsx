@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, Database, Table2 } from 'lucide-react'
+import { ChevronDown, Database, Table2, BarChart3, TrendingUp, Lightbulb } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export default function TableExplorer({ tables = [], database = '' }) {
@@ -31,9 +31,15 @@ export default function TableExplorer({ tables = [], database = '' }) {
         </button>
 
         {expanded && database && (
-          <div className="text-xs text-muted-foreground space-y-1 pl-2">
-            <p>📊 {tables.length} tablas disponibles</p>
-            <p>📈 {tables.reduce((sum, t) => sum + (t.row_count || 0), 0).toLocaleString()} registros</p>
+          <div className="text-xs text-muted-foreground space-y-1.5 pl-2">
+            <p className="flex items-center gap-1.5">
+              <BarChart3 className="w-3.5 h-3.5 text-foreground" strokeWidth={2.5} />
+              {tables.length} tablas disponibles
+            </p>
+            <p className="flex items-center gap-1.5">
+              <TrendingUp className="w-3.5 h-3.5 text-foreground" strokeWidth={2.5} />
+              {tables.reduce((sum, t) => sum + (t.row_count || 0), 0).toLocaleString()} registros
+            </p>
           </div>
         )}
       </div>
@@ -93,7 +99,10 @@ export default function TableExplorer({ tables = [], database = '' }) {
 
       {/* Footer */}
       <div className="p-3 border-t border-border text-xs text-muted-foreground">
-        <p>💡 Haz clic en cualquier tabla para ver más detalles</p>
+        <p className="flex items-center gap-1.5">
+          <Lightbulb className="w-3.5 h-3.5 text-foreground" strokeWidth={2.5} />
+          Haz clic en cualquier tabla para ver más detalles
+        </p>
       </div>
     </motion.div>
   )
