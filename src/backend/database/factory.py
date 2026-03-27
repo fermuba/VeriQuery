@@ -251,3 +251,61 @@ def get_connector_info() -> dict:
     except Exception as e:
         logger.error(f"Error getting connector info: {e}")
         return {"status": "error", "error": str(e)}
+
+
+def create_connector(db_type: str, host: str, port: int, database: str, 
+                     username: str, password: Optional[str] = None,
+                     filepath: Optional[str] = None, driver: Optional[str] = None) -> Optional[DatabaseConnector]:
+    """
+    Create a database connector with specific configuration.
+    
+    Args:
+        db_type: Database type ("sqlserver", "postgresql", etc.)
+        host: Database host
+        port: Database port
+        database: Database name
+        username: Database username
+        password: Database password
+        filepath: File path (for SQLite)
+        driver: ODBC driver name (for SQL Server)
+        
+    Returns:
+        DatabaseConnector instance or None if creation fails
+    """
+    
+    try:
+        if db_type.lower() == "sqlserver":
+            from .base import ConnectionConfig
+            config = ConnectionConfig(
+                host=host,
+                port=port,
+                username=username,
+                password=password,
+                database=database,
+                driver=driver
+            )
+            connector = SQLServerConnector(config)
+            logger.info(f"Created SQL Server connector: {host}:{port}/{database}")
+            return connector
+            
+        elif db_type.lower() in ("postgresql", "postgres"):
+            from .postgresql import PostgreSQLConnector
+            from .base import ConnectionConfig
+            config = ConnectionConfig(
+                host=host,
+                port=port,
+                username=username,
+                password=password,
+                database=database
+            )
+            connector = PostgreSQLConnector(config)
+            logger.info(f"Created PostgreSQL connector: {host}:{port}/{database}")
+            return connector
+        else:
+            logger.error(f"Unknown database type: {db_type}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Failed to create {db_type} connector: {e}", exc_info=True)
+        return None
+

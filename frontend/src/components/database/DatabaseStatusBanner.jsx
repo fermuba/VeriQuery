@@ -22,9 +22,9 @@ export default function DatabaseStatusBanner() {
         icon: Loader,
         title: 'Escaneando schema...',
         description: 'Analizando tablas y datos',
-        color: 'text-blue-600',
-        bgColor: 'bg-blue-50',
-        borderColor: 'border-blue-200',
+        color: 'text-slate-700',
+        bgColor: 'bg-slate-50',
+        borderColor: 'border-slate-200',
       }
     }
 
@@ -40,13 +40,18 @@ export default function DatabaseStatusBanner() {
     }
 
     if (isReady) {
+      // Calcular total de tablas y registros desde el nuevo formato de Array
+      const tables = schema?.tables || []
+      const tableCount = tables.length
+      const totalRecords = tables.reduce((sum, table) => sum + (table.row_count || 0), 0)
+      
       return {
         icon: CheckCircle,
-        title: `${schema?.tables?.length || 0} tablas - ${schema?.total_records?.toLocaleString() || 0} registros`,
+        title: `${tableCount} tablas - ${totalRecords.toLocaleString()} registros`,
         description: `Listo para auditar ${selectedDatabase.display_name || selectedDatabase.db_name}`,
-        color: 'text-green-600',
-        bgColor: 'bg-green-50',
-        borderColor: 'border-green-200',
+        color: 'text-emerald-800',
+        bgColor: 'bg-emerald-50',
+        borderColor: 'border-emerald-300',
       }
     }
 

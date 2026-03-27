@@ -1,19 +1,70 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Loader2, Database } from 'lucide-react'
+import { Send, Loader2, Database, Menu, ChevronLeft } from 'lucide-react'
 import { useAppStore } from '../../store/useAppStore'
 import MessageItem from './MessageItem'
-import SuggestedPrompts from './SuggestedPrompts'
+import DynamicSuggestedPrompts from './DynamicSuggestedPrompts'
+import TableExplorer from './TableExplorer'
 import DatabaseStatusBanner from '../database/DatabaseStatusBanner'
 import { motion } from 'framer-motion'
 
 export default function ChatContainer() {
   const [input, setInput] = useState('')
+  const [tables, setTables] = useState([])
+  const [showSidebar, setShowSidebar] = useState(true)
   const { messages, isLoading, sendQuery, selectedDatabase } = useAppStore()
   const bottomRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
+
+  // Cargar tablas al cambiar base de datos
+  useEffect(() => {
+    if (selectedDatabase) {
+      fetchTables()
+    }
+  }, [selectedDatabase])
+
+  const fetchTables = async () => {
+    try {
+      // STEP 1: Extract database name from selectedDatabase
+      // selectedDatabase might be an object with 'name' property or just a string
+      const dbName = selectedDatabase?.name || selectedDatabase
+      
+      if (!dbName) {
+        console.warn('No database name available for schema fetch')
+        return
+      }
+      
+      // STEP 2: Fetch schema with database_name parameter
+      // This ensures we get the correct schema for the selected database
+      const url = new URL('http://localhost:8000/api/schema')
+      url.searchParams.append('database_name', dbName)
+      
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token') || 'demo'}`,
+        }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        // Convertir tables object a array con metadata (soportando tanto array como object legacy)
+        const tablesArray = Array.isArray(data.tables)
+          ? data.tables
+          : Object.entries(data.tables || {}).map(([name, info]) => ({
+              name,
+              columns: info.columns || [],
+              column_count: (info.columns || []).length,
+              row_count: info.row_count || 0
+            }))
+        setTables(tablesArray)
+        console.info(`✅ Loaded ${tablesArray.length} tables for database: ${dbName}`)
+      }
+    } catch (err) {
+      console.error('Error fetching tables:', err)
+    }
+  }
 
   const handleSend = () => {
     const text = input.trim()
@@ -41,16 +92,44 @@ export default function ChatContainer() {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+    <div className="flex-1 flex min-w-0 overflow-hidden">
+      {/* Sidebar - Table Explorer */}
+      {showSidebar && (
+        <TableExplorer 
+          tables={tables}
+          database={selectedDatabase}
+        />
+      )}
+
+      {/* Mobile Sidebar Toggle */}
+      <button
+        onClick={() => setShowSidebar(!showSidebar)}
+        className="lg:hidden absolute top-20 left-4 z-50 p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+        title="Toggle tables"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
       {/* Header */}
       <div className="px-6 py-4 border-b border-border shrink-0">
-        <div className="space-y-3">
-          <div>
-            <h2 className="text-base font-semibold text-foreground">Auditoría Interactiva</h2>
-            <p className="text-xs text-muted-foreground">Consulta forense con IA</p>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => useAppStore.setState({ selectedDatabase: null })}
+              className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              title="Cambiar de base de datos"
+            >
+              <ChevronLeft className="w-5 h-5" strokeWidth={2} />
+            </button>
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Auditoría Interactiva</h2>
+              <p className="text-xs text-muted-foreground">Consulta forense con IA</p>
+            </div>
           </div>
-          <DatabaseStatusBanner />
         </div>
+        <DatabaseStatusBanner />
       </div>
 
       {/* Messages Area */}
@@ -68,7 +147,11 @@ export default function ChatContainer() {
             <p className="text-sm text-muted-foreground mb-6">
               Haz preguntas en lenguaje natural sobre tu base de datos
             </p>
-            <SuggestedPrompts onSelect={(text) => setInput(text)} />
+            {/* Usar prompts dinámicos basados en tablas disponibles */}
+            <DynamicSuggestedPrompts 
+              tables={tables}
+              onSelect={(text) => setInput(text)} 
+            />
           </motion.div>
         ) : (
           <>
@@ -124,6 +207,7 @@ export default function ChatContainer() {
             )}
           </button>
         </div>
+      </div>
       </div>
     </div>
   )

@@ -4,16 +4,15 @@ import { LayoutDashboard, FileSearch, Database, Settings, Shield, Activity, Pane
 import { useState } from 'react'
 
 const NAV_ITEMS = [
-  { icon: LayoutDashboard, label: 'Panel Principal' },
-  { icon: FileSearch,      label: 'Registros de Auditoría' },
-  { icon: Database,        label: 'Base de Datos' },
-  { icon: Activity,        label: 'Monitoreo' },
-  { icon: Settings,        label: 'Configuración' },
+  { id: 'chat',       icon: LayoutDashboard, label: 'Panel Principal' },
+  { id: 'audit',      icon: FileSearch,      label: 'Registros de Auditoría' },
+  { id: 'database',   icon: Database,        label: 'Base de Datos' },
+  { id: 'monitoring', icon: Activity,        label: 'Monitoreo' },
+  { id: 'settings',   icon: Settings,        label: 'Configuración' },
 ]
 
 function Sidebar() {
-  const [activeIndex, setActiveIndex] = useState(0)
-  const { selectedDatabase } = useAppStore()
+  const { selectedDatabase, currentView, setCurrentView } = useAppStore()
   
   return (
     <aside className="w-[4.5rem] hover:w-60 transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] border-r border-border glass-surface flex flex-col py-5 group shrink-0 overflow-hidden z-10">
@@ -26,12 +25,12 @@ function Sidebar() {
 
       {/* Main Navigation */}
       <nav className="flex flex-col gap-1.5 px-2 flex-1 min-w-0">
-        {NAV_ITEMS.map(({ icon: Icon, label }, i) => (
+        {NAV_ITEMS.map(({ id, icon: Icon, label }) => (
           <button
-            key={label}
-            onClick={() => setActiveIndex(i)}
+            key={id}
+            onClick={() => setCurrentView(id)}
             className={`flex items-center gap-3 px-3 py-3 rounded-md transition-all duration-200 text-left whitespace-nowrap flex-shrink-0 ${
-              i === activeIndex
+              currentView === id
                 ? 'bg-slate-800/10 text-slate-800'
                 : 'text-slate-600 hover:bg-muted hover:translate-x-0.5'
             }`}

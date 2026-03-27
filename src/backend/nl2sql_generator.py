@@ -168,6 +168,47 @@ class NL2SQLGenerator:
             return self._active_schema
         return "⚠️ Schema no disponible — conectá una BD primero"
 
+    def set_active_schema_direct(self, db_name: str, db_type: str, schema_text: str) -> dict:
+        """
+        Establece el schema activo directamente sin cargar desde BD.
+        Útil cuando ya tenemos el schema desde el SchemaScanner.
+        
+        Args:
+            db_name: nombre de la BD
+            db_type: tipo de BD (postgresql, sqlserver, etc)
+            schema_text: texto del schema ya formateado
+        
+        Returns:
+            dict con success y detalles
+        """
+        try:
+            prev_db = self._active_db_name
+            
+            self._active_schema = schema_text
+            self._active_db_name = db_name
+            self._active_db_type = db_type
+            self._active_connector = None  # No necesitamos el connector si ya tenemos el schema
+            self._schema_loaded_at = datetime.now().isoformat()
+            
+            if prev_db and prev_db != db_name:
+                logger.info(f"🧹 Schema anterior de '{prev_db}' reemplazado")
+            
+            logger.info(
+                f"✅ BD activa → '{db_name}' ({db_type}) "
+                f"— schema establecido {len(schema_text)} chars "
+                f"— actualizado a las {self._schema_loaded_at}"
+            )
+            return {
+                "success": True,
+                "db_name": db_name,
+                "db_type": db_type,
+                "schema_chars": len(schema_text),
+                "schema_loaded_at": self._schema_loaded_at
+            }
+        except Exception as e:
+            logger.error(f"❌ Error estableciendo schema para '{db_name}': {e}")
+            return {"success": False, "error": str(e)}
+
     def generate_sql(
         self,
         natural_language_query: str,
@@ -399,7 +440,7 @@ class NL2SQLGenerator:
         db_type: str = "sqlserver"
     ) -> str:
         """
-        Carga schema real desde cualquier conector.
+        Carga schema real desde cualquier conector (MultiDatabaseConnector o DatabaseConnector).
 
         Agregado: db_type determina el TABLE_SCHEMA correcto:
           - sqlserver  → 'dbo'
@@ -430,12 +471,19 @@ class NL2SQLGenerator:
                 ORDER BY TABLE_NAME
             """)
 
-            if not tables_result.success:
-                raise Exception(
-                    f"No se pudieron obtener tablas: {tables_result.error}"
-                )
+            # IMPORTANTE: Manejar tanto tuplas como objetos con .success
+            if isinstance(tables_result, tuple):
+                # MultiDatabaseConnector devuelve (data, error)
+                tables_data, tables_error = tables_result
+                if tables_error:
+                    raise Exception(f"No se pudieron obtener tablas: {tables_error}")
+                tables = [row.get("TABLE_NAME") or row.get("table_name") for row in tables_data]
+            else:
+                # DatabaseConnector viejo devuelve objeto con .success
+                if not tables_result.success:
+                    raise Exception(f"No se pudieron obtener tablas: {tables_result.error}")
+                tables = [row["TABLE_NAME"] for row in tables_result.data]
 
-            tables = [row["TABLE_NAME"] for row in tables_result.data]
             logger.info(f"  → {len(tables)} tablas encontradas")
 
             for table_name in tables:
@@ -449,11 +497,22 @@ class NL2SQLGenerator:
                     ORDER BY ORDINAL_POSITION
                 """)
 
-                if cols_result.success:
-                    col_names = [col["COLUMN_NAME"] for col in cols_result.data]
-                    schema_text += f"{table_name}({', '.join(col_names)})\n"
+                # IMPORTANTE: Manejar tanto tuplas como objetos
+                if isinstance(cols_result, tuple):
+                    # MultiDatabaseConnector devuelve (data, error)
+                    cols_data, cols_error = cols_result
+                    if not cols_error:
+                        col_names = [col.get("COLUMN_NAME") or col.get("column_name") for col in cols_data]
+                        schema_text += f"{table_name}({', '.join(col_names)})\n"
+                    else:
+                        schema_text += f"{table_name}()\n"
                 else:
-                    schema_text += f"{table_name}()\n"
+                    # DatabaseConnector viejo devuelve objeto con .success
+                    if cols_result.success:
+                        col_names = [col["COLUMN_NAME"] for col in cols_result.data]
+                        schema_text += f"{table_name}({', '.join(col_names)})\n"
+                    else:
+                        schema_text += f"{table_name}()\n"
 
             return schema_text.strip()
 
@@ -596,6 +655,7 @@ class NL2SQLGenerator:
             return f"Tablas usadas: {', '.join(tables)}."
 
     def _generate_explanation(self, question, sql, tracer) -> str:
+        """Genera explicación del SQL ANTES de ejecutarlo."""
         try:
             response = self.client.chat.completions.create(
                 model=self.deployment,
@@ -625,3 +685,79 @@ class NL2SQLGenerator:
             return explanation
         except Exception:
             return "Consulta generada correctamente."
+
+    def generate_user_friendly_answer(self, question: str, sql: str, data: list, tracer=None) -> str:
+        """
+        Genera una respuesta amigable al usuario basada en los DATOS REALES.
+        
+        Diferencia con _generate_explanation:
+        - _generate_explanation: se ejecuta ANTES, sin datos (describe el SQL)
+        - generate_user_friendly_answer: se ejecuta DESPUÉS, con datos reales (responde la pregunta)
+        
+        Args:
+            question: Pregunta original del usuario
+            sql: SQL que se ejecutó
+            data: Resultados reales de la consulta
+            tracer: QueryTracer opcional para logging
+            
+        Returns:
+            str: Respuesta amigable basada en los datos
+        """
+        if not data:
+            return "No hay datos que coincidan con tu consulta."
+        
+        try:
+            # Preparar resumen de datos para el LLM
+            if len(data) == 1:
+                data_summary = f"1 fila retornada: {data[0]}"
+            else:
+                data_summary = f"{len(data)} filas retornadas. Primeras 3: {data[:3]}"
+            
+            # Llamar al LLM para generar respuesta
+            response = self.client.chat.completions.create(
+                model=self.deployment,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Eres un asistente que responde preguntas basándote en resultados de BD. "
+                            "Responde en ESPAÑOL, de forma concisa (1-2 oraciones), formateado con Markdown. "
+                            "Si es un número, usalo directamente. Si es moneda/dinero, formatea como $. "
+                            "Nunca menciones SQL ni tablas. Sé natural y amigable."
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Pregunta del usuario: {question}\n\n"
+                            f"Datos de la consulta:\n{data_summary}\n\n"
+                            f"Genera una respuesta natural al usuario basada en estos datos."
+                        )
+                    }
+                ],
+                max_tokens=150, 
+                temperature=0.3
+            )
+            
+            answer = response.choices[0].message.content.strip()
+            
+            if tracer:
+                tracer.step(
+                    archivo="nl2sql_generator",
+                    paso="user_friendly_answer",
+                    entrada=f"Pregunta: '{question}' | {len(data)} filas",
+                    accion="LLM genera respuesta basada en datos reales",
+                    salida=answer[:80] + "..." if len(answer) > 80 else answer
+                )
+            
+            return answer
+            
+        except Exception as e:
+            # Fallback: generar respuesta simple basada en los datos
+            logger.error(f"Error generando respuesta amigable: {e}")
+            if len(data) == 1:
+                row = data[0]
+                first_value = list(row.values())[0] if row else "resultado"
+                return f"El resultado es: **{first_value}**"
+            else:
+                return f"Encontré **{len(data)}** resultados."

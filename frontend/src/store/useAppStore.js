@@ -7,8 +7,10 @@ export const useAppStore = create((set, get) => ({
   // UI state
   sidebarOpen: true,
   previewOpen: true,
+  currentView: 'chat', // 'chat' | 'audit' | 'database' | 'monitoring' | 'settings'
   toggleSidebar: () => set(s => ({ sidebarOpen: !s.sidebarOpen })),
   togglePreview: () => set(s => ({ previewOpen: !s.previewOpen })),
+  setCurrentView: (view) => set({ currentView: view }),
 
   // Connection
   connectionStatus: 'connected', // 'connected' | 'disconnected' | 'loading'
