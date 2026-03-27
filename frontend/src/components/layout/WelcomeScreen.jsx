@@ -1,4 +1,4 @@
-import { Database, Plus, ArrowRight } from 'lucide-react'
+import { Database, Plus, ArrowRight, Server, Box, Globe } from 'lucide-react'
 import { useAppStore } from '../../store/useAppStore'
 import DatabaseModal from '../database/DatabaseModal'
 import { useState, useEffect } from 'react'
@@ -61,9 +61,13 @@ export default function WelcomeScreen() {
                   className="p-4 rounded-xl border border-border glass-surface hover:border-primary/50 hover:bg-primary/5 transition-all duration-200 text-left group"
                 >
                   <div className="flex items-start justify-between mb-2">
-                    <span className="text-2xl">
-                      {db.db_type === 'postgresql' ? '🐘' : db.db_type === 'sqlserver' ? '🔵' : '📊'}
-                    </span>
+                    <div className="p-2 rounded-lg bg-muted/50 border border-border/50">
+                      {db.db_type === 'postgresql' ? (
+                        <Server className="w-6 h-6 text-indigo-500" strokeWidth={1.5} />
+                      ) : (
+                        <Database className="w-6 h-6 text-blue-600" strokeWidth={1.5} />
+                      )}
+                    </div>
                     <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors opacity-0 group-hover:opacity-100" strokeWidth={2} />
                   </div>
                   <p className="font-semibold text-foreground">{db.db_name}</p>

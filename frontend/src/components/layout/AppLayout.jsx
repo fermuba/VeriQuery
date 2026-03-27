@@ -47,8 +47,11 @@ function Sidebar() {
       {selectedDatabase && (
         <div className="px-2 py-4 border-t border-border mt-auto">
           <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <p className="text-xs text-muted-foreground mb-2">Active Database</p>
-            <p className="text-xs font-semibold text-foreground truncate">{selectedDatabase}</p>
+            <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground mb-2 px-1">Active Database</p>
+            <div className="flex items-center gap-2 px-1">
+              <Database className="w-3.5 h-3.5 text-blue-500" strokeWidth={2} />
+              <p className="text-xs font-semibold text-foreground truncate">{selectedDatabase}</p>
+            </div>
           </div>
         </div>
       )}

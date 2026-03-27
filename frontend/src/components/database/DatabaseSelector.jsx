@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
-import { Database, Plus, Check, AlertCircle, Loader, Trash2 } from 'lucide-react'
+import { Database, Plus, Check, AlertCircle, Loader, Trash2, Server, Box } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import DatabaseModal from './DatabaseModal'
 
@@ -131,9 +131,13 @@ export default function DatabaseSelector() {
               `}
             >
               <div className="flex items-center gap-2 flex-1 min-w-0">
-                <span className="text-sm flex-shrink-0">
-                  {db.db_type === 'postgresql' ? '🐘' : db.db_type === 'sqlserver' ? '🔵' : '📊'}
-                </span>
+                <div className="flex-shrink-0">
+                  {db.db_type === 'postgresql' ? (
+                    <Server className="w-4 h-4 text-indigo-500" strokeWidth={2} />
+                  ) : (
+                    <Database className="w-4 h-4 text-blue-500" strokeWidth={2} />
+                  )}
+                </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium truncate">{db.db_name}</p>
                   <p className="text-[10px] opacity-60 truncate">{db.host}</p>

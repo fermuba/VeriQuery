@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Database, Shield, Trash2, Eye, EyeOff } from 'lucide-react'
+import { Plus, Database, Shield, Trash2, Eye, EyeOff, Server, Globe, Box } from 'lucide-react'
 import { motion } from 'framer-motion'
 import DatabaseModal from '../database/DatabaseModal'
 import SchemaOverview from '../SchemaOverview'
@@ -60,14 +60,24 @@ export default function DatabaseConfigPanel() {
     }
   }
 
-  const getDbIcon = (dbType) => {
-    const icons = {
-      sqlserver: '🔵',
-      postgresql: '🐘',
-      mysql: '🐬',
-      sqlite: '📄'
+  const getDbIcon = (dbType, isLocal) => {
+    if (isLocal) {
+      return <Box className="w-5 h-5 text-blue-500" strokeWidth={2} />
     }
-    return icons[dbType?.toLowerCase()] || '📊'
+    
+    switch (dbType?.toLowerCase()) {
+      case 'postgresql':
+      case 'postgres':
+        return <Server className="w-5 h-5 text-indigo-500" strokeWidth={2} />
+      case 'sqlserver':
+        return <Database className="w-5 h-5 text-blue-600" strokeWidth={2} />
+      case 'mysql':
+        return <Database className="w-5 h-5 text-orange-500" strokeWidth={2} />
+      case 'sqlite':
+        return <Database className="w-5 h-5 text-slate-500" strokeWidth={2} />
+      default:
+        return <Database className="w-5 h-5 text-muted-foreground" strokeWidth={2} />
+    }
   }
 
   return (
@@ -124,12 +134,24 @@ export default function DatabaseConfigPanel() {
               {/* Main Row */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 flex-1">
-                  <span className="text-2xl">{getDbIcon(db.db_type)}</span>
+                  <div className="p-2 rounded-lg bg-muted/50 border border-border/50">
+                    {getDbIcon(db.db_type, !db.host || db.host.includes('localhost'))}
+                  </div>
                   <div className="flex-1">
                     <h3 className="font-semibold text-foreground">{dbName}</h3>
-                    <p className="text-xs text-foreground/60">
-                      {db.db_type?.toUpperCase() || 'UNKNOWN'} • {db.host || 'Local'}
-                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border/50">
+                        {db.db_type || 'SQL'}
+                      </span>
+                      <span className="text-xs text-foreground/40 flex items-center gap-1">
+                        {!db.host || db.host.includes('localhost') ? (
+                          <Box className="w-3 h-3" />
+                        ) : (
+                          <Globe className="w-3 h-3" />
+                        )}
+                        {db.host || 'Local Instance'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 

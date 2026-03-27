@@ -9,7 +9,7 @@ import SecurityBadge from './components/security/SecurityBadge'
 import WelcomeScreen from './components/layout/WelcomeScreen'
 import DatabaseConfigPanel from './components/database/DatabaseConfigPanel'
 import AuditLog from './components/data/AuditLog'
-import { Activity, Settings } from 'lucide-react'
+import { Activity, Settings, Loader, AlertCircle } from 'lucide-react'
 import { useAppStore } from './store/useAppStore'
 import { useBackendConnection } from './hooks/useBackend'
 
@@ -61,11 +61,18 @@ function MainApp() {
             <WelcomeScreen />
           )
         ) : (
-          <div style={{ padding: '20px', textAlign: 'center' }}>
+          <div className="flex flex-col items-center justify-center p-12 space-y-4">
             {loading ? (
-              <p>🔄 Conectando al backend...</p>
+              <>
+                <Loader className="w-10 h-10 animate-spin text-primary opacity-50" />
+                <p className="text-muted-foreground animate-pulse">Conectando al backend de VeriQuery...</p>
+              </>
             ) : (
-              <p style={{ color: 'red' }}>❌ Error: No se puede conectar al backend ({error})</p>
+              <>
+                <AlertCircle className="w-12 h-12 text-destructive opacity-50" />
+                <p className="text-destructive font-medium">Error de Conexión</p>
+                <p className="text-xs text-muted-foreground max-w-xs">{error}</p>
+              </>
             )}
           </div>
         )}
