@@ -75,11 +75,18 @@ export default function SchemaOverview({ isEmbed = false }) {
             <CheckCircle className="text-green-600" size={20} />
             <div>
               <p className="font-semibold text-gray-900">
-                ✅ {selectedDatabase.display_name || selectedDatabase.db_name || selectedDatabase} conectado exitosamente
+                {selectedDatabase.display_name || selectedDatabase.db_name || selectedDatabase} conectado exitosamente
               </p>
-              <p className="text-sm text-gray-600">
-                📊 {tableCount} tablas encontradas • {totalRecords.toLocaleString()} registros totales
-              </p>
+              <div className="flex items-center gap-4 mt-1">
+                <p className="text-sm text-gray-600 flex items-center gap-1.5">
+                  <Database size={14} className="text-slate-400" />
+                  {tableCount} tablas encontradas
+                </p>
+                <p className="text-sm text-gray-600 flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                  {totalRecords.toLocaleString()} registros totales
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -88,7 +95,10 @@ export default function SchemaOverview({ isEmbed = false }) {
       {/* Data Overview Section */}
       <div className="mx-6 border border-gray-200 rounded-lg overflow-hidden">
         <div className="bg-gray-50 border-b border-gray-200 px-4 py-3">
-          <p className="font-semibold text-gray-900">📋 TUS DATOS</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-900 flex items-center gap-2">
+            <Database size={14} className="text-slate-500" />
+            Estructura de Datos
+          </p>
         </div>
         <div className="p-4 space-y-3 max-h-96 overflow-y-auto">
           <p className="text-sm text-gray-600 px-2">
@@ -176,7 +186,7 @@ export default function SchemaOverview({ isEmbed = false }) {
           {/* Configure Access Button */}
           <button className="w-full mt-4 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 text-gray-700 font-medium">
             <Settings size={18} />
-            ⚙️ Configurar acceso
+            Configurar acceso
           </button>
         </div>
       </div>
@@ -184,7 +194,10 @@ export default function SchemaOverview({ isEmbed = false }) {
       {/* Suggested Queries Section */}
       <div className={`${isEmbed ? '' : 'mx-6'} border border-gray-200 rounded-lg overflow-hidden`}>
         <div className="bg-gray-50 border-b border-gray-200 px-4 py-3">
-          <p className="font-semibold text-gray-900">💡 PRUEBA ESTAS PREGUNTAS</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-900 flex items-center gap-2">
+            <Sparkles size={14} className="text-amber-500" />
+            Análisis Sugerido
+          </p>
         </div>
         <div className="p-4 space-y-2">
           <p className="text-sm text-gray-600">
@@ -197,18 +210,21 @@ export default function SchemaOverview({ isEmbed = false }) {
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.1 }}
-              className="w-full px-3 py-2 text-left text-sm border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors bg-white text-gray-700 truncate"
+              className="w-full px-3 py-2 text-left text-sm border border-gray-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors bg-white text-gray-700 flex items-center gap-3"
             >
-              {query.emoji} {query.text}
+              <div className="flex-shrink-0 text-slate-400">
+                <Search size={14} />
+              </div>
+              <span className="truncate">{query.text}</span>
             </motion.button>
           ))}
 
           {suggestedQueries.length > 4 && (
             <button
               onClick={() => setShowMoreQueries(!showMoreQueries)}
-              className="w-full px-3 py-2 text-sm text-slate-700 font-medium hover:text-slate-900 flex items-center justify-center gap-1 mt-2"
+              className="w-full px-3 py-2 text-xs text-slate-700 font-medium hover:text-slate-900 flex items-center justify-center gap-1 mt-2"
             >
-              {showMoreQueries ? '- Ver menos' : '+ Ver más ejemplos'}
+              {showMoreQueries ? 'Ver menos' : 'Ver más ejemplos'}
             </button>
           )}
         </div>

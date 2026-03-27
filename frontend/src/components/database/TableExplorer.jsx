@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ChevronDown, ChevronRight, Database, Eye } from 'lucide-react'
+import { ChevronDown, ChevronRight, Database, Eye, RefreshCw, List } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 /**
@@ -78,8 +78,9 @@ export default function TableExplorer({ onTableSelect }) {
 
   return (
     <div className="space-y-2">
-      <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-        📋 Tablas Disponibles
+      <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] flex items-center gap-2">
+        <List className="w-3 h-3" />
+        Tablas Disponibles
       </div>
       
       <div className="space-y-1 max-h-96 overflow-y-auto">
@@ -147,9 +148,10 @@ export default function TableExplorer({ onTableSelect }) {
       {/* Botón para refrescar */}
       <button
         onClick={fetchTables}
-        className="w-full mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-accent/50"
+        className="w-full mt-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors p-2 rounded-lg hover:bg-accent/50 flex items-center justify-center gap-2"
       >
-        🔄 Refrescar Schema
+        <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+        Actualizar Schema
       </button>
     </div>
   )
