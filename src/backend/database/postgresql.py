@@ -185,12 +185,10 @@ class PostgreSQLConnector(DatabaseConnector):
                 success=True,
                 data=data,
                 error=None,
-                row_count=row_count,
-                execution_time_ms=execution_time
+                row_count=row_count
             )
             
         except psycopg2.Error as e:
-            execution_time = (datetime.now() - start_time).total_seconds() * 1000
             error_msg = str(e)
             logger.error(f"PostgreSQL query error: {error_msg}")
             
@@ -198,12 +196,10 @@ class PostgreSQLConnector(DatabaseConnector):
                 success=False,
                 data=[],
                 error=error_msg,
-                row_count=0,
-                execution_time_ms=execution_time
+                row_count=0
             )
         
         except Exception as e:
-            execution_time = (datetime.now() - start_time).total_seconds() * 1000
             error_msg = f"Unexpected error: {str(e)}"
             logger.error(error_msg)
             
@@ -211,8 +207,7 @@ class PostgreSQLConnector(DatabaseConnector):
                 success=False,
                 data=[],
                 error=error_msg,
-                row_count=0,
-                execution_time_ms=execution_time
+                row_count=0
             )
         
         finally:
@@ -260,3 +255,105 @@ class PostgreSQLConnector(DatabaseConnector):
             "queries_executed": self._query_count,
             "last_query_time": self._last_query_time.isoformat() if self._last_query_time else None
         }
+
+    def execute_query_with_params(self, sql: str, params: Dict[str, Any]) -> QueryResult:
+        """
+        Execute a parameterized SELECT query against PostgreSQL.
+        
+        Args:
+            sql: SQL query with %s or %(name)s placeholders
+            params: Dictionary of parameter names and values
+            
+        Returns:
+            QueryResult: Standardized result object
+        """
+        if not self.is_connected or not self.connection:
+            return QueryResult(
+                success=False,
+                data=[],
+                error="Not connected to database",
+                row_count=0
+            )
+        
+        start_time = datetime.now()
+        cursor = None
+        
+        try:
+            cursor = self.connection.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            
+            logger.debug(f"Executing parameterized PostgreSQL query: {sql[:100]}...")
+            cursor.execute(sql, params)
+            
+            if sql.strip().upper().startswith('SELECT'):
+                rows = cursor.fetchall()
+                data = [dict(row) for row in rows]
+                row_count = len(data)
+            else:
+                self.connection.commit()
+                row_count = cursor.rowcount
+                data = []
+            
+            execution_time = (datetime.now() - start_time).total_seconds() * 1000
+            self._query_count += 1
+            self._last_query_time = datetime.now()
+            
+            logger.info(f"Parameterized query executed: {row_count} rows in {execution_time:.3f}ms")
+            
+            return QueryResult(
+                success=True,
+                data=data,
+                error=None,
+                row_count=row_count
+            )
+            
+        except psycopg2.Error as e:
+            execution_time = (datetime.now() - start_time).total_seconds() * 1000
+            error_msg = str(e)
+            logger.error(f"PostgreSQL parameterized query error: {error_msg}")
+            
+            return QueryResult(
+                success=False,
+                data=[],
+                error=error_msg,
+                row_count=0
+            )
+        
+        except Exception as e:
+            execution_time = (datetime.now() - start_time).total_seconds() * 1000
+            error_msg = f"Unexpected error: {str(e)}"
+            logger.error(error_msg)
+            
+            return QueryResult(
+                success=False,
+                data=[],
+                error=error_msg,
+                row_count=0
+            )
+        
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except:
+                    pass
+
+    def health_check(self) -> Tuple[bool, str]:
+        """
+        Perform a health check on the PostgreSQL connection.
+        
+        Returns:
+            Tuple[bool, str]: (is_healthy, message)
+        """
+        try:
+            if not self.is_connected or not self.connection:
+                # Attempt to reconnect
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("SELECT version()")
+                version = cursor.fetchone()[0]
+                return (True, f"Connected to PostgreSQL: {version}")
+            
+        except Exception as e:
+            return (False, f"Health check failed: {str(e)}")
+

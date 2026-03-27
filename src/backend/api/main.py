@@ -624,9 +624,13 @@ async def process_query(request: QueryRequest) -> QueryResponse:
         generated_sql = _clean_sql(generated_sql)
         logger.debug(f"[{query_id}] Cleaned SQL:\n{generated_sql}")
         
-        # Convert to SQL Server syntax if needed
-        generated_sql = _convert_sql_to_sqlserver(generated_sql)
-        logger.debug(f"[{query_id}] SQL Server compatible SQL:\n{generated_sql}")
+        # Convert to SQL Server syntax only if the active database is SQL Server
+        active_db_type = sql_result.get("active_db_type", "sqlserver")
+        if active_db_type == "sqlserver":
+            generated_sql = _convert_sql_to_sqlserver(generated_sql)
+            logger.debug(f"[{query_id}] SQL Server compatible SQL:\n{generated_sql}")
+        else:
+            logger.debug(f"[{query_id}] Using native {active_db_type} SQL (no conversion)")
         
         # =====================================================================
         # STEP 3: VALIDATE GENERATED SQL FOR SECURITY
