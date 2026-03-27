@@ -145,6 +145,19 @@ export const useAppStore = create((set, get) => ({
     }
   },
 
+  // Fetch schema (tables and columns) for a specific database
+  fetchDatabaseSchema: async (dbName) => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/schema?db_name=${dbName}&session_id=none`)
+      if (!response.ok) throw new Error('Failed to fetch schema')
+      const data = await response.json()
+      return data.tables || {} // { "table_name": { "col_name": "type", ... } }
+    } catch (err) {
+      console.error(`Error fetching schema for ${dbName}:`, err)
+      return null
+    }
+  },
+
   // Send query (with persistent session)
   sendQuery: async (text) => {
     const { addMessage, setLoading, setQueryResult, addAuditEvent, sessionId, selectedDatabase } = get()
