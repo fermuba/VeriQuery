@@ -199,7 +199,7 @@ app.add_middleware(
         "http://127.0.0.1:5174",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:8080",
-        "*"
+        "https://witty-flower-090c49e10.4.azurestaticapps.net"
     ],
     allow_credentials=True,
     allow_methods=["*"],
