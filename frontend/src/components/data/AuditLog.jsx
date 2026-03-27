@@ -64,8 +64,8 @@ export default function AuditLog() {
             </div>
 
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium truncate">
-                {event.type === 'query' ? '🔍 Query' : event.type === 'database' ? '📊 BD' : '⚠️ Error'}
+              <p className="text-[10px] font-bold uppercase tracking-wider opacity-70">
+                {event.type === 'query' ? 'Query' : event.type === 'database' ? 'Database' : 'System Event'}
               </p>
               {event.text && (
                 <p className="text-xs line-clamp-2 opacity-75 mt-0.5">

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, Code, BookOpen, Table as TableIcon, AlertCircle } from 'lucide-react'
+import { ChevronDown, Code, BookOpen, Table as TableIcon, AlertCircle, Search } from 'lucide-react'
 import ConfidenceBadge from './ConfidenceBadge'
 import ClarificationOptions from './ClarificationOptions'
 import ChartRenderer from '../charts/ChartRenderer'
@@ -15,8 +15,14 @@ export default function MessageItem({ message }) {
   if (role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[75%] px-5 py-3.5 rounded-xl rounded-br-sm bg-primary text-primary-foreground text-sm leading-relaxed">
-          {text}
+        <div className="max-w-[85%] px-5 py-3 rounded-2xl rounded-tr-none bg-[#0f172a] text-slate-100 shadow-sm border border-slate-800/50">
+          <div className="flex items-center gap-2 mb-1 opacity-50">
+            <Search className="w-3 h-3" />
+            <span className="text-[10px] font-bold uppercase tracking-widest">Query</span>
+          </div>
+          <p className="text-sm leading-relaxed font-medium">
+            {text}
+          </p>
         </div>
       </div>
     )
@@ -24,12 +30,12 @@ export default function MessageItem({ message }) {
 
   return (
     <div className="flex gap-3">
-      <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0 mt-1">
-        <span className="text-xs font-bold text-primary">VQ</span>
+      <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center shrink-0 mt-1 shadow-sm border border-slate-800">
+        <span className="text-[10px] font-black text-white">VQ</span>
       </div>
-      <div className="flex-1 space-y-2">
+      <div className="flex-1 space-y-3">
         <div className="flex items-start gap-3">
-          <div className="bento-card px-5 py-3.5 text-sm text-foreground leading-relaxed flex-1">
+          <div className="bento-card px-5 py-4 text-sm text-foreground/90 leading-relaxed flex-1 bg-white border-slate-200/60 shadow-sm">
             {text}
           </div>
           {confidence != null && <ConfidenceBadge score={confidence} />}
