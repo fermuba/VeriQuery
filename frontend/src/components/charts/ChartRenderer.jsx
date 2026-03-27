@@ -77,10 +77,10 @@ function detectChartType(data) {
   }
 
   if (textColumns.length > 0 && numericColumns.length > 0) {
-    if (data.length <= 10 && numericColumns.length === 1) {
-      return 'pie' // Pocas categorías con un valor
+    if (data.length >= 2 && data.length <= 10 && numericColumns.length === 1) {
+      return 'pie' // Pocas categorías con un valor (mínimo 2 para que el pie tenga sentido)
     }
-    return 'bar' // Categorías vs valores
+    return 'bar' // Categorías vs valores (incluye 1 solo registro)
   }
 
   // Solo columnas numéricas sin texto → barra (usa keys como categorías)
