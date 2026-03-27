@@ -17,7 +17,7 @@ export default function Header() {
   return (
     <header className="h-20 glass-surface border-b border-border flex items-center justify-between px-8 shrink-0 z-40">
       <div className="flex items-center gap-3">
-        <div className="w-11 h-11 bg-slate-900 rounded-lg flex items-center justify-center overflow-hidden shadow-sm">
+        <div className="w-11 h-11 mt-1 bg-slate-900 rounded-lg flex items-center justify-center overflow-hidden shadow-sm">
           <img src={logo} alt="VeriQuery" className="w-7 h-7 object-contain" />
         </div>
         <div>

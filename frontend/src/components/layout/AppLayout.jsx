@@ -20,7 +20,7 @@ function Sidebar() {
 
 
       {/* Main Navigation */}
-      <nav className="flex flex-col gap-1.5 px-2 flex-1 min-w-0">
+      <nav className="flex flex-col gap-1.5 px-2 flex-1 min-w-0 mt-10">
         {NAV_ITEMS.map(({ id, icon: Icon, label }) => (
           <button
             key={id}
