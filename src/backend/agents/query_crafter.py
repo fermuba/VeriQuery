@@ -139,7 +139,8 @@ class QueryCrafter:
         self,
         user_question: str,
         schema_info: str,
-        tracer: Optional[QueryTracer] = None
+        tracer: Optional[QueryTracer] = None,
+        db_type: str = "sqlserver"
     ) -> dict:
         """
         Genera SQL a partir de pregunta en lenguaje natural.
@@ -163,22 +164,30 @@ class QueryCrafter:
                 accion="Llamando a Azure OpenAI con schema real inyectado en prompt",
                 salida="pendiente..."
             )
-        def _build_user_prompt(user_question: str) -> str:
+        def _build_user_prompt(user_question: str, syntax_rule: str, ranking_example: str) -> str:
             return f"""{{
-        "task": "generate_tsql_select",
+        "task": "generate_sql_select",
         "question": "{user_question}",
         "constraints": {{
-            "top_limit": 25,
-            "top_placement": "immediately after SELECT keyword",
-            "scalar_aggregation": "no TOP, no GROUP BY",
-            "column_spacing": "brackets required for columns with spaces",
+            "column_syntax": "{syntax_rule}",
+            "ranking_pattern": "para el más caro / más vendido / mayor X → {ranking_example}",
+            "aggregation_rule": "nunca mezclar columna descriptiva con MAX/MIN sin GROUP BY",
             "output_format": "raw SQL only, no markdown, no backticks"
         }},
-        "output": "single T-SQL SELECT or ERROR:SCHEMA"
+        "output": "single SQL SELECT or ERROR:SCHEMA"
         }}"""
 
+        # Sintaxis según motor
+        if db_type == "postgresql":
+            syntax_rule = 'Columnas con espacios → comillas dobles: "Product Name", "Unit Price"'
+            ranking_example = 'SELECT "Product Name", "Unit Price" AS precio_maximo FROM "Product" ORDER BY "Unit Price" DESC LIMIT 1'
+        else:
+            syntax_rule = "Columnas con espacios → corchetes: [Product Name], [Unit Price]"
+            ranking_example = "SELECT TOP 1 [Product Name], [Unit Price] AS precio_maximo FROM Product ORDER BY [Unit Price] DESC"
+
+
         try:
-            user_prompt = _build_user_prompt(user_question)
+            user_prompt = _build_user_prompt(user_question, syntax_rule, ranking_example)  # ✅
 
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
