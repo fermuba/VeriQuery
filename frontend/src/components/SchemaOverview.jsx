@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  CheckCircle, Database, ChevronDown, Eye, Settings, Sparkles, ArrowRight, Plus
+  CheckCircle, Database, ChevronDown, Eye, Settings, Sparkles, ArrowRight, Plus, Search
 } from 'lucide-react';
 import { useSchemaScanner } from '../hooks/useSchemaScanner';
 import { useAppStore } from '../store/useAppStore';
