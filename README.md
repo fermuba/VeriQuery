@@ -265,7 +265,24 @@ Top 10 customers identified with total revenue ranging from $45,000 to $125,000
 
 The lifecycle of a single query demonstrates how the layers interact:
 
-
+## 🧠 Query Trace & Explainability
+ 
+ Every query in VeriQuery is fully traceable. The system logs each step of the decision pipeline for forensic auditing.
+ 
+ ![Query Trace Log](./docs/images/logs.png)
+ 
+ ### Trace Includes
+ 
+ - Query validation
+ - Security checks
+ - Intent classification
+ - SQL generation
+ - Output validation
+ - Execution metrics
+ 
+ This enables full transparency and explainable AI workflows.
+ 
+ ---
 
 ### Step-by-Step Flow
 
@@ -331,8 +348,26 @@ The user interface built with React and Vite.
 ---
 
 ## 📡 API Reference
-
-### Base URL
+ 
+ VeriQuery provides a fully documented REST API using Swagger UI, enabling developers and investigators to interact with the system programmatically.
+ 
+ ![Swagger API Interface](./docs/images/swagger.png)
+ 
+ ### Available Endpoints
+ 
+ - Test Database Connection
+ - Save Database Config
+ - Activate Database
+ - Validate Credentials
+ - Query Execution
+ - Health Check
+ - Schema Discovery
+ 
+ This interface allows real-time testing and debugging of VeriQuery services.
+ 
+ ---
+ 
+ ### Base URL
 
 ```
 Development: http://localhost:8000
