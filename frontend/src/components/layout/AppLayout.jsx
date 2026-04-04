@@ -2,42 +2,37 @@ import Header from './Header'
 import { useAppStore } from '../../store/useAppStore'
 import { LayoutDashboard, FileSearch, Database, Settings, Shield, Activity, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { useState } from 'react'
+import logo from '../../assets/logo.png'
 
 const NAV_ITEMS = [
-  { icon: LayoutDashboard, label: 'Panel Principal' },
-  { icon: FileSearch,      label: 'Registros de Auditoría' },
-  { icon: Database,        label: 'Base de Datos' },
-  { icon: Activity,        label: 'Monitoreo' },
-  { icon: Settings,        label: 'Configuración' },
+  { id: 'chat',       icon: LayoutDashboard, label: 'Panel Principal' },
+  { id: 'audit',      icon: FileSearch,      label: 'Registros de Auditoría' },
+  { id: 'database',   icon: Database,        label: 'Base de Datos' },
+  { id: 'monitoring', icon: Activity,        label: 'Monitoreo' },
+  { id: 'settings',   icon: Settings,        label: 'Configuración' },
 ]
 
 function Sidebar() {
-  const [activeIndex, setActiveIndex] = useState(0)
-  const { selectedDatabase } = useAppStore()
+  const { selectedDatabase, currentView, setCurrentView } = useAppStore()
   
   return (
     <aside className="w-[4.5rem] hover:w-60 transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] border-r border-border glass-surface flex flex-col py-5 group shrink-0 overflow-hidden z-10">
-      {/* Logo */}
-      <div className="px-2 mb-6">
-        <div className="w-11 h-11 rounded-lg bg-primary/10 flex items-center justify-center">
-          <Shield className="w-6 h-6 text-primary" strokeWidth={1.5} />
-        </div>
-      </div>
+
 
       {/* Main Navigation */}
-      <nav className="flex flex-col gap-1.5 px-2 flex-1 min-w-0">
-        {NAV_ITEMS.map(({ icon: Icon, label }, i) => (
+      <nav className="flex flex-col gap-1.5 px-2 flex-1 min-w-0 mt-10">
+        {NAV_ITEMS.map(({ id, icon: Icon, label }) => (
           <button
-            key={label}
-            onClick={() => setActiveIndex(i)}
+            key={id}
+            onClick={() => setCurrentView(id)}
             className={`flex items-center gap-3 px-3 py-3 rounded-md transition-all duration-200 text-left whitespace-nowrap flex-shrink-0 ${
-              i === activeIndex
-                ? 'bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))]'
-                : 'text-[hsl(var(--sidebar-foreground))] hover:bg-muted hover:translate-x-0.5'
+              currentView === id
+                ? 'bg-slate-800/10 text-slate-800'
+                : 'text-slate-600 hover:bg-muted hover:translate-x-0.5'
             }`}
           >
-            <Icon className="w-5 h-5 flex-shrink-0" strokeWidth={1.5} />
-            <span className="text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <Icon className="w-5 h-5 flex-shrink-0 text-slate-800" strokeWidth={1.5} />
+            <span className="text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-slate-800">
               {label}
             </span>
           </button>
@@ -48,8 +43,11 @@ function Sidebar() {
       {selectedDatabase && (
         <div className="px-2 py-4 border-t border-border mt-auto">
           <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <p className="text-xs text-muted-foreground mb-2">Active Database</p>
-            <p className="text-xs font-semibold text-foreground truncate">{selectedDatabase}</p>
+            <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground mb-2 px-1">Active Database</p>
+            <div className="flex items-center gap-2 px-1">
+              <Database className="w-3.5 h-3.5 text-blue-500" strokeWidth={2} />
+              <p className="text-xs font-semibold text-foreground truncate">{selectedDatabase}</p>
+            </div>
           </div>
         </div>
       )}

@@ -206,7 +206,10 @@ export default function WelcomeScreen() {
 
       {/* Footer info */}
       <div className="text-center text-xs text-muted-foreground space-y-2">
-        <p>💡 Tip: Puedes pausar este onboarding en cualquier momento</p>
+        <p className="flex items-center justify-center gap-2">
+          <Lightbulb className="w-4 h-4 text-amber-500" />
+          Tip: Puedes pausar este onboarding en cualquier momento
+        </p>
         <p>Accede de nuevo desde el menú de ayuda</p>
       </div>
     </motion.div>

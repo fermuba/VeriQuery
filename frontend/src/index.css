@@ -12,13 +12,13 @@
     --card: 215 20% 99%;
     --card-foreground: 215 25% 12%;
 
-    --primary: 205 100% 41%;
+    --primary: 215 15% 35%;
     --primary-foreground: 0 0% 100%;
 
     --muted: 215 20% 94%;
     --muted-foreground: 215 15% 46%;
 
-    --accent: 192 100% 47%;
+    --accent: 215 15% 40%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
@@ -26,12 +26,12 @@
     --warning: 35 92% 50%;
 
     --border: 215 18% 88%;
-    --ring: 205 100% 41%;
+    --ring: 215 15% 35%;
 
     --sidebar-background: 215 22% 96%;
     --sidebar-foreground: 215 20% 30%;
-    --sidebar-accent: 205 100% 96%;
-    --sidebar-accent-foreground: 205 100% 41%;
+    --sidebar-accent: 215 15% 90%;
+    --sidebar-accent-foreground: 215 15% 35%;
     --sidebar-border: 215 18% 90%;
 
     --bento-shadow: 0 0 0 1px rgba(0,0,0,.03), 0 2px 4px rgba(0,0,0,.05), 0 12px 24px -12px rgba(0,0,0,.05);

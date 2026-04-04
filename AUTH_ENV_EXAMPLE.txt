@@ -1,0 +1,145 @@
+# ============================================================
+# ForensicGuardian - Authentication Configuration
+# ============================================================
+# 
+# Instructions:
+# 1. Copy this file to .env.example
+# 2. Fill in all values marked as "TODO" or "Get from..."
+# 3. For development, use localhost values
+# 4. For production, use your actual Azure AD values
+# 
+# DO NOT commit .env file to GitHub (add to .gitignore)
+# ============================================================
+
+# ============================================================
+# CRITICAL: Azure AD Configuration
+# ============================================================
+
+# Your Azure AD Application (Client) ID
+# Get from: Azure Portal > App registrations > Your app > Application (client) ID
+# Example: "550e8400-e29b-41d4-a716-446655440000"
+AZURE_CLIENT_ID="550e8400-e29b-41d4-a716-446655440000"
+
+# Your Azure AD Tenant ID
+# Get from: Azure Portal > Azure AD > Overview > Tenant ID
+# Example: "550e8400-e29b-41d4-a716-446655441111"
+AZURE_TENANT_ID="550e8400-e29b-41d4-a716-446655441111"
+
+# Token issuer URL (usually follow this pattern)
+# Format: https://login.microsoftonline.com/{TENANT_ID}/v2.0
+AZURE_ISSUER="https://login.microsoftonline.com/550e8400-e29b-41d4-a716-446655441111/v2.0"
+
+# Microsoft JWKS endpoint (usually this standard endpoint)
+# This is where we fetch public keys for JWT verification
+AZURE_JWKS_URL="https://login.microsoftonline.com/common/discovery/v2.0/keys"
+
+# Audience (who the token is intended for)
+# Usually same as AZURE_CLIENT_ID
+AZURE_AUDIENCE="550e8400-e29b-41d4-a716-446655440000"
+
+# ============================================================
+# JWT Validation Settings
+# ============================================================
+
+# Clock skew tolerance in seconds
+# Allows for small time differences between your server and Azure
+# Default: 60 seconds
+TOKEN_EXPIRATION_TOLERANCE=60
+
+# JWKS (keys) cache TTL in seconds
+# How long to cache Microsoft's public keys before refreshing
+# Default: 3600 (1 hour) - Microsoft rotates keys periodically
+JWKS_CACHE_TTL=3600
+
+# ============================================================
+# User Auto-Provisioning Configuration
+# ============================================================
+
+# Default role assigned to newly created users
+# Options: "analyst" (default), "admin", "manager", etc.
+# You can change roles after user creation through admin panel
+DEFAULT_USER_ROLE="analyst"
+
+# ============================================================
+# Database Configuration
+# ============================================================
+
+# SQLite (for development)
+DATABASE_URL="sqlite:///./guardian.db"
+
+# SQL Server (for production)
+# Format: mssql+pyodbc://user:password@server/database?driver=ODBC+Driver+17+for+SQL+Server
+# DATABASE_URL="mssql+pyodbc://sa:YourPassword@sqlserver.company.com/forensic_guardian?driver=ODBC+Driver+17+for+SQL+Server"
+
+# PostgreSQL (alternative for production)
+# DATABASE_URL="postgresql://user:password@db.company.com:5432/forensic_guardian"
+
+# ============================================================
+# API Configuration
+# ============================================================
+
+# API title (shown in docs)
+API_TITLE="ForensicGuardian API"
+
+# API version
+API_VERSION="1.0.0"
+
+# Environment (development, staging, production)
+ENVIRONMENT="development"
+
+# ============================================================
+# Logging Configuration
+# ============================================================
+
+# Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+LOG_LEVEL="INFO"
+
+# Log file location
+LOG_FILE="logs/forensic_guardian.log"
+
+# ============================================================
+# Optional: Client Credentials Flow (if using for M2M)
+# ============================================================
+
+# Only needed if your backend needs to call Microsoft APIs directly
+# For user authentication, you don't need this
+
+# AZURE_CLIENT_SECRET="your-client-secret-from-azure-portal"
+
+# ============================================================
+# Optional: Advanced Settings
+# ============================================================
+
+# Enable debug mode (verbose logging)
+DEBUG=False
+
+# Allowed origins for CORS (comma-separated)
+ALLOWED_ORIGINS="http://localhost:3000,http://localhost:8000"
+
+# API key for optional API key authentication
+# API_KEY="your-secret-api-key"
+
+# ============================================================
+# Notes:
+# 
+# 1. AZURE_CLIENT_ID and AZURE_TENANT_ID are CRITICAL
+#    Without these, authentication will not work
+# 
+# 2. AZURE_ISSUER should follow the pattern:
+#    https://login.microsoftonline.com/{TENANT_ID}/v2.0
+# 
+# 3. AZURE_AUDIENCE should usually match AZURE_CLIENT_ID
+# 
+# 4. For development:
+#    - Use localhost for all URLs
+#    - Can use HTTP (not recommended for production)
+# 
+# 5. For production:
+#    - Use HTTPS everywhere
+#    - Use strong secrets
+#    - Store in Azure Key Vault, not in .env
+# 
+# 6. Never commit .env to version control
+#    Add ".env" to .gitignore
+# 
+# ============================================================

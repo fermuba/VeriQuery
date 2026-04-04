@@ -1,8 +1,10 @@
-import { useState } from 'react'
-import { Plus, Database, Shield, Trash2, Eye, EyeOff } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, Database, Shield, Trash2, Eye, EyeOff, Server, Globe, Box } from 'lucide-react'
 import { motion } from 'framer-motion'
 import DatabaseModal from '../database/DatabaseModal'
+import SchemaOverview from '../SchemaOverview'
 import { API } from '../../config/endpoints'
+import { useAppStore } from '../../store/useAppStore'
 
 /**
  * DatabaseConfigPanel Component
@@ -11,23 +13,18 @@ import { API } from '../../config/endpoints'
  */
 
 export default function DatabaseConfigPanel() {
+  const { selectDatabase, selectedDatabase: activeDb, userDatabases, fetchUserDatabases } = useAppStore()
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [databases, setDatabases] = useState([
-    {
-      name: 'ContosoV210k',
-      db_type: 'sqlserver',
-      host: 'server.database.windows.net',
-      database: 'ContosoV210k',
-      is_readonly: true,
-      stored_in_keyvault: true,
-      last_verified: '2026-03-20T10:30:00'
-    }
-  ])
   const [selectedDb, setSelectedDb] = useState(null)
   const [showDetails, setShowDetails] = useState(false)
 
-  const handleAddDatabase = (config) => {
-    setDatabases(prev => [...prev, config])
+  useEffect(() => {
+    fetchUserDatabases()
+  }, [fetchUserDatabases])
+
+  const handleAddDatabase = async (config) => {
+    setIsModalOpen(false)
+    await fetchUserDatabases()
   }
 
   const handleVerifyDatabase = async (dbName) => {
@@ -39,12 +36,7 @@ export default function DatabaseConfigPanel() {
       const data = await response.json()
       
       if (data.success) {
-        // Update last_verified timestamp
-        setDatabases(prev => prev.map(db => 
-          db.name === dbName 
-            ? { ...db, last_verified: new Date().toISOString() }
-            : db
-        ))
+        await fetchUserDatabases()
       }
     } catch (err) {
       console.error('Verification failed:', err)
@@ -61,21 +53,31 @@ export default function DatabaseConfigPanel() {
       )
       
       if (response.ok) {
-        setDatabases(prev => prev.filter(db => db.name !== dbName))
+        await fetchUserDatabases()
       }
     } catch (err) {
       console.error('Delete failed:', err)
     }
   }
 
-  const getDbIcon = (dbType) => {
-    const icons = {
-      sqlserver: '🔵',
-      postgresql: '🐘',
-      mysql: '🐬',
-      sqlite: '📄'
+  const getDbIcon = (dbType, isLocal) => {
+    if (isLocal) {
+      return <Box className="w-5 h-5 text-blue-500" strokeWidth={2} />
     }
-    return icons[dbType?.toLowerCase()] || '📊'
+    
+    switch (dbType?.toLowerCase()) {
+      case 'postgresql':
+      case 'postgres':
+        return <Server className="w-5 h-5 text-indigo-500" strokeWidth={2} />
+      case 'sqlserver':
+        return <Database className="w-5 h-5 text-blue-600" strokeWidth={2} />
+      case 'mysql':
+        return <Database className="w-5 h-5 text-orange-500" strokeWidth={2} />
+      case 'sqlite':
+        return <Database className="w-5 h-5 text-slate-500" strokeWidth={2} />
+      default:
+        return <Database className="w-5 h-5 text-muted-foreground" strokeWidth={2} />
+    }
   }
 
   return (
@@ -103,7 +105,7 @@ export default function DatabaseConfigPanel() {
 
       {/* Database List */}
       <div className="grid gap-3">
-        {databases.length === 0 ? (
+        {!userDatabases || userDatabases.length === 0 ? (
           <div className="bento-card p-8 text-center">
             <Database className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" strokeWidth={1.5} />
             <p className="text-foreground/60">No databases configured yet</p>
@@ -115,9 +117,11 @@ export default function DatabaseConfigPanel() {
             </button>
           </div>
         ) : (
-          databases.map((db, idx) => (
+          userDatabases.map((db, idx) => {
+            const dbName = db.db_name || db.name
+            return (
             <motion.div
-              key={db.name}
+              key={dbName}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.05 }}
@@ -130,17 +134,34 @@ export default function DatabaseConfigPanel() {
               {/* Main Row */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 flex-1">
-                  <span className="text-2xl">{getDbIcon(db.db_type)}</span>
+                  <div className="p-2 rounded-lg bg-muted/50 border border-border/50">
+                    {getDbIcon(db.db_type, !db.host || db.host.includes('localhost'))}
+                  </div>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-foreground">{db.name}</h3>
-                    <p className="text-xs text-foreground/60">
-                      {db.db_type.toUpperCase()} • {db.host}
-                    </p>
+                    <h3 className="font-semibold text-foreground">{dbName}</h3>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border/50">
+                        {db.db_type || 'SQL'}
+                      </span>
+                      <span className="text-xs text-foreground/40 flex items-center gap-1">
+                        {!db.host || db.host.includes('localhost') ? (
+                          <Box className="w-3 h-3" />
+                        ) : (
+                          <Globe className="w-3 h-3" />
+                        )}
+                        {db.host || 'Local Instance'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 {/* Status Badges */}
                 <div className="flex items-center gap-2">
+                  {dbName === activeDb && (
+                    <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                      ✓ Activa
+                    </div>
+                  )}
                   {db.is_readonly && (
                     <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium bg-success/10 text-success">
                       <Shield className="w-3 h-3" strokeWidth={2} />
@@ -156,7 +177,7 @@ export default function DatabaseConfigPanel() {
               </div>
 
               {/* Details (Expandable) */}
-              {showDetails && selectedDb?.name === db.name && (
+              {showDetails && (selectedDb?.db_name || selectedDb?.name) === dbName && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
@@ -165,7 +186,7 @@ export default function DatabaseConfigPanel() {
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div>
                       <p className="text-foreground/60">Database</p>
-                      <p className="font-medium text-foreground">{db.database}</p>
+                      <p className="font-medium text-foreground">{db.database || 'N/A'}</p>
                     </div>
                     <div>
                       <p className="text-foreground/60">Last Verified</p>
@@ -177,10 +198,22 @@ export default function DatabaseConfigPanel() {
 
                   {/* Action Buttons */}
                   <div className="flex gap-2 justify-end pt-2">
+                    {dbName !== activeDb && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          selectDatabase(dbName)
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium 
+                          bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 transition-colors"
+                      >
+                        ✓ Activar Consulta
+                      </button>
+                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleVerifyDatabase(db.name)
+                        handleVerifyDatabase(dbName)
                       }}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium 
                         bg-muted hover:bg-muted/80 text-foreground transition-colors"
@@ -190,7 +223,7 @@ export default function DatabaseConfigPanel() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleDeleteDatabase(db.name)
+                        handleDeleteDatabase(dbName)
                       }}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium 
                         bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors"
@@ -199,10 +232,15 @@ export default function DatabaseConfigPanel() {
                       Delete
                     </button>
                   </div>
+
+                  {/* Schema Browser Integration */}
+                  <div className="pt-4 mt-4 border-t border-border" onClick={(e) => e.stopPropagation()}>
+                    <SchemaOverview isEmbed={true} />
+                  </div>
                 </motion.div>
               )}
             </motion.div>
-          ))
+          )})
         )}
       </div>
 

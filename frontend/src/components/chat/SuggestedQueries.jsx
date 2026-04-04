@@ -1,5 +1,7 @@
 import { motion } from 'framer-motion'
-import { Sparkles, MessageSquare, ChevronRight } from 'lucide-react'
+import { 
+  Sparkles, ChevronRight, BarChart3, List, Clock, TrendingUp, Link, Search, AlertTriangle, Lightbulb 
+} from 'lucide-react'
 
 /**
  * Genera sugerencias inteligentes de queries basadas en el schema
@@ -21,14 +23,14 @@ export function generateSuggestedQueries(schema) {
   queries.push({
     category: 'Conteo',
     text: `¿Cuántos ${mainTable.name} tenemos en total?`,
-    icon: '📊',
+    icon: BarChart3,
   })
 
   // 2. Resumen general
   queries.push({
     category: 'Resumen',
     text: `Dame un resumen general de ${mainTable.name}`,
-    icon: '📋',
+    icon: List,
   })
 
   // 3. Registros recientes (si tiene columna de fecha)
@@ -40,13 +42,13 @@ export function generateSuggestedQueries(schema) {
     queries.push({
       category: 'Temporales',
       text: `¿Cuáles son los ${mainTable.name} más recientes?`,
-      icon: '⏰',
+      icon: Clock,
     })
 
     queries.push({
       category: 'Análisis',
       text: `Cambios en ${mainTable.name} en los últimos 7 días`,
-      icon: '📈',
+      icon: TrendingUp,
     })
   }
 
@@ -56,7 +58,7 @@ export function generateSuggestedQueries(schema) {
     queries.push({
       category: 'Relaciones',
       text: `Correlaciona datos entre ${mainTable.name} y ${secondTable.name}`,
-      icon: '🔗',
+      icon: Link,
     })
   }
 
@@ -64,7 +66,7 @@ export function generateSuggestedQueries(schema) {
   queries.push({
     category: 'Forense',
     text: `¿Hay patrones anómalos en ${mainTable.name}?`,
-    icon: '🔍',
+    icon: Search,
   })
 
   // 6. Duplicados/Integridad
@@ -76,7 +78,7 @@ export function generateSuggestedQueries(schema) {
     queries.push({
       category: 'Integridad',
       text: `¿Hay registros duplicados en ${mainTable.name}?`,
-      icon: '⚠️',
+      icon: AlertTriangle,
     })
   }
 
@@ -89,15 +91,6 @@ export default function SuggestedQueries({ schema, onSelectQuery }) {
   if (queries.length === 0) {
     return null
   }
-
-  // Agrupar por categoría
-  const grouped = queries.reduce((acc, q) => {
-    if (!acc[q.category]) {
-      acc[q.category] = []
-    }
-    acc[q.category].push(q)
-    return acc
-  }, {})
 
   return (
     <motion.div
@@ -122,10 +115,12 @@ export default function SuggestedQueries({ schema, onSelectQuery }) {
             className="w-full text-left p-3 rounded-lg border border-border/50 bg-muted/20 hover:bg-muted/40 hover:border-primary/30 transition-all group"
           >
             <div className="flex items-start gap-3">
-              <span className="text-lg flex-shrink-0">{query.icon}</span>
+              <div className="p-2 rounded-md bg-white shadow-sm border border-border group-hover:border-primary/30 group-hover:text-primary transition-colors text-slate-500">
+                <query.icon className="w-4 h-4" />
+              </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-primary/70 mb-1">{query.category}</p>
-                <p className="text-sm text-foreground line-clamp-2">{query.text}</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-primary/70 mb-1">{query.category}</p>
+                <p className="text-sm text-foreground font-medium line-clamp-2">{query.text}</p>
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary flex-shrink-0 transition-colors" />
             </div>
@@ -133,8 +128,11 @@ export default function SuggestedQueries({ schema, onSelectQuery }) {
         ))}
       </div>
 
-      <div className="text-xs text-muted-foreground text-center pt-2">
-        💡 O escribe tu propia pregunta en el campo inferior
+      <div className="text-[10px] text-muted-foreground/50 text-center pt-2 uppercase font-bold tracking-[0.2em] flex items-center justify-center gap-2">
+        <div className="h-px bg-border flex-1" />
+        <Lightbulb className="w-3 h-3" />
+        O escribe tu propia pregunta
+        <div className="h-px bg-border flex-1" />
       </div>
     </motion.div>
   )

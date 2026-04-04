@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
-import { Database, Plus, Check, AlertCircle, Loader } from 'lucide-react'
+import { Database, Plus, Check, AlertCircle, Loader, Trash2, Server, Box } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import DatabaseModal from './DatabaseModal'
 
@@ -19,6 +19,7 @@ export default function DatabaseSelector() {
     fetchUserDatabases,
     selectDatabase,
     addDatabase: addDatabaseToStore,
+    deleteDatabase,
   } = useAppStore()
 
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -46,6 +47,17 @@ export default function DatabaseSelector() {
       fetchUserDatabases()
     } catch (err) {
       console.error('Error adding database:', err)
+    }
+  }
+
+  const handleDeleteDatabase = async (e, dbName) => {
+    e.stopPropagation()
+    if (window.confirm(`Are you sure you want to delete the configuration for "${dbName}"?`)) {
+      try {
+        await deleteDatabase(dbName)
+      } catch (err) {
+        console.error('Error deleting database:', err)
+      }
     }
   }
 
@@ -119,22 +131,39 @@ export default function DatabaseSelector() {
               `}
             >
               <div className="flex items-center gap-2 flex-1 min-w-0">
-                <span className="text-sm flex-shrink-0">
-                  {db.db_type === 'postgresql' ? '🐘' : db.db_type === 'sqlserver' ? '🔵' : '📊'}
-                </span>
+                <div className="flex-shrink-0">
+                  {db.db_type === 'postgresql' ? (
+                    <Server className="w-4 h-4 text-indigo-500" strokeWidth={2} />
+                  ) : (
+                    <Database className="w-4 h-4 text-blue-500" strokeWidth={2} />
+                  )}
+                </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium truncate">{db.db_name}</p>
                   <p className="text-[10px] opacity-60 truncate">{db.host}</p>
                 </div>
               </div>
 
-              {/* Selection indicator */}
-              <div className="flex-shrink-0 ml-2">
-                {selectingDb === db.db_name ? (
-                  <Loader className="w-4 h-4 animate-spin" strokeWidth={2} />
-                ) : selectedDatabase === db.db_name ? (
-                  <Check className="w-4 h-4" strokeWidth={2.5} />
-                ) : null}
+              {/* Actions (Select + Delete) */}
+              <div className="flex-shrink-0 ml-2 flex items-center gap-1">
+                {/* Delete button */}
+                <button
+                  type="button"
+                  onClick={(e) => handleDeleteDatabase(e, db.db_name)}
+                  className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                  title="Delete database"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              
+                {/* Selection indicator */}
+                <div className="w-6 flex items-center justify-center">
+                  {selectingDb === db.db_name ? (
+                    <Loader className="w-4 h-4 animate-spin" strokeWidth={2} />
+                  ) : selectedDatabase === db.db_name ? (
+                    <Check className="w-4 h-4" strokeWidth={2.5} />
+                  ) : null}
+                </div>
               </div>
             </motion.button>
           ))}

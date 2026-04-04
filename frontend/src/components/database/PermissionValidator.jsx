@@ -77,7 +77,7 @@ FLUSH PRIVILEGES;`
           
           <div className="flex-1">
             <h3 className={`font-semibold ${is_readonly ? 'text-success' : 'text-warning'}`}>
-              {is_readonly ? '✓ Read-Only Confirmed' : '⚠ Write Access Detected'}
+              {is_readonly ? 'Privilegios de Lectura Confirmados' : 'Acceso de Escritura Detectado'}
             </h3>
             <p className="text-sm text-foreground/80 mt-1">
               {readonly_message}

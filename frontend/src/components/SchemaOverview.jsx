@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  CheckCircle, Database, ChevronDown, Eye, Settings, Sparkles, ArrowRight, Plus
+  CheckCircle, Database, ChevronDown, Eye, Settings, Sparkles, ArrowRight, Plus, Search
 } from 'lucide-react';
 import { useSchemaScanner } from '../hooks/useSchemaScanner';
 import { useAppStore } from '../store/useAppStore';
 
-export default function SchemaOverview() {
+export default function SchemaOverview({ isEmbed = false }) {
   const { schema, loading, error } = useSchemaScanner();
   const { selectedDatabase } = useAppStore();
   const [expandedTable, setExpandedTable] = useState(null);
@@ -22,10 +22,10 @@ export default function SchemaOverview() {
         animate={{ opacity: 1 }}
         className="p-6 space-y-4"
       >
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
+        <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-lg p-6 border border-slate-200">
           <div className="flex items-center gap-3">
             <div className="animate-spin">
-              <Database className="text-blue-600" size={24} />
+              <Database className="text-slate-700" size={24} />
             </div>
             <div>
               <h3 className="font-semibold text-gray-900">Escaneando schema...</h3>
@@ -57,7 +57,7 @@ export default function SchemaOverview() {
 
   // Calculate totals
   const tableCount = schema.tables?.length || 0;
-  const totalRecords = schema.tables?.reduce((sum, table) => sum + (table.record_count || 0), 0) || 0;
+  const totalRecords = schema.tables?.reduce((sum, table) => sum + (table.row_count || 0), 0) || 0;
 
   // Suggested queries based on schema
   const suggestedQueries = generateSuggestedQueries(schema.tables || []);
@@ -75,11 +75,18 @@ export default function SchemaOverview() {
             <CheckCircle className="text-green-600" size={20} />
             <div>
               <p className="font-semibold text-gray-900">
-                ✅ {selectedDatabase} conectado exitosamente
+                {selectedDatabase.display_name || selectedDatabase.db_name || selectedDatabase} conectado exitosamente
               </p>
-              <p className="text-sm text-gray-600">
-                📊 {tableCount} tablas encontradas • {totalRecords.toLocaleString()} registros totales
-              </p>
+              <div className="flex items-center gap-4 mt-1">
+                <p className="text-sm text-gray-600 flex items-center gap-1.5">
+                  <Database size={14} className="text-slate-400" />
+                  {tableCount} tablas encontradas
+                </p>
+                <p className="text-sm text-gray-600 flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                  {totalRecords.toLocaleString()} registros totales
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -88,7 +95,10 @@ export default function SchemaOverview() {
       {/* Data Overview Section */}
       <div className="mx-6 border border-gray-200 rounded-lg overflow-hidden">
         <div className="bg-gray-50 border-b border-gray-200 px-4 py-3">
-          <p className="font-semibold text-gray-900">📋 TUS DATOS</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-900 flex items-center gap-2">
+            <Database size={14} className="text-slate-500" />
+            Estructura de Datos
+          </p>
         </div>
         <div className="p-4 space-y-3 max-h-96 overflow-y-auto">
           <p className="text-sm text-gray-600 px-2">
@@ -112,7 +122,7 @@ export default function SchemaOverview() {
                     <CheckCircle size={16} className="text-green-600 flex-shrink-0" />
                     <span className="truncate">{table.name}</span>
                     <span className="text-xs text-gray-500 ml-auto flex-shrink-0">
-                      {table.record_count?.toLocaleString()} registros
+                      {table.row_count?.toLocaleString()} registros
                     </span>
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
@@ -176,15 +186,18 @@ export default function SchemaOverview() {
           {/* Configure Access Button */}
           <button className="w-full mt-4 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 text-gray-700 font-medium">
             <Settings size={18} />
-            ⚙️ Configurar acceso
+            Configurar acceso
           </button>
         </div>
       </div>
 
       {/* Suggested Queries Section */}
-      <div className="mx-6 border border-gray-200 rounded-lg overflow-hidden">
+      <div className={`${isEmbed ? '' : 'mx-6'} border border-gray-200 rounded-lg overflow-hidden`}>
         <div className="bg-gray-50 border-b border-gray-200 px-4 py-3">
-          <p className="font-semibold text-gray-900">💡 PRUEBA ESTAS PREGUNTAS</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-900 flex items-center gap-2">
+            <Sparkles size={14} className="text-amber-500" />
+            Análisis Sugerido
+          </p>
         </div>
         <div className="p-4 space-y-2">
           <p className="text-sm text-gray-600">
@@ -197,36 +210,41 @@ export default function SchemaOverview() {
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.1 }}
-              className="w-full px-3 py-2 text-left text-sm border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors bg-white text-gray-700 truncate"
+              className="w-full px-3 py-2 text-left text-sm border border-gray-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors bg-white text-gray-700 flex items-center gap-3"
             >
-              {query.emoji} {query.text}
+              <div className="flex-shrink-0 text-slate-400">
+                <Search size={14} />
+              </div>
+              <span className="truncate">{query.text}</span>
             </motion.button>
           ))}
 
           {suggestedQueries.length > 4 && (
             <button
               onClick={() => setShowMoreQueries(!showMoreQueries)}
-              className="w-full px-3 py-2 text-sm text-blue-600 font-medium hover:text-blue-700 flex items-center justify-center gap-1 mt-2"
+              className="w-full px-3 py-2 text-xs text-slate-700 font-medium hover:text-slate-900 flex items-center justify-center gap-1 mt-2"
             >
-              {showMoreQueries ? '- Ver menos' : '+ Ver más ejemplos'}
+              {showMoreQueries ? 'Ver menos' : 'Ver más ejemplos'}
             </button>
           )}
         </div>
       </div>
 
-      {/* Start Button */}
-      <div className="mx-6 mb-6 border border-gray-200 rounded-lg overflow-hidden">
-        <button className="w-full px-4 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold flex items-center justify-center gap-2 transition-all">
-          <Sparkles size={20} />
-          🚀 Empezar a preguntar
-        </button>
-        <div className="bg-blue-50 border-t border-gray-200 px-4 py-3">
-          <p className="text-xs text-gray-600 mb-2">O escribe tu pregunta aquí:</p>
-          <div className="border border-gray-300 rounded-lg p-3 bg-white text-sm text-gray-500">
-            Pregúntale cualquier cosa a tus datos...
+      {/* Start Button - Hidden if embedded */}
+      {!isEmbed && (
+        <div className="mx-6 mb-6 border border-gray-200 rounded-lg overflow-hidden">
+          <button className="w-full px-4 py-4 bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-800 hover:to-slate-900 text-white font-semibold flex items-center justify-center gap-2 transition-all">
+            <Sparkles size={20} />
+            🚀 Empezar a preguntar
+          </button>
+          <div className="bg-slate-50 border-t border-gray-200 px-4 py-3">
+            <p className="text-xs text-gray-600 mb-2">O escribe tu pregunta aquí:</p>
+            <div className="border border-gray-300 rounded-lg p-3 bg-white text-sm text-gray-500">
+              Pregúntale cualquier cosa a tus datos...
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </motion.div>
   );
 }
